@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, Copy, Check, Play, Shield, ChevronRight, BookOpen, Code2 } from "lucide-react";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css';
+import { Loader2, Copy, Check, Play, Shield, ChevronRight } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -253,7 +249,6 @@ export default function DocsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeId, setActiveId] = useState(null);
-  const [activeTab, setActiveTab] = useState("api"); // "api" or "sdk"
   const mainRef = useRef(null);
 
   useEffect(() => {
@@ -342,38 +337,9 @@ export default function DocsPage() {
         </span>
       </header>
 
-      {/* Tab Navigation */}
-      <div className="fixed top-14 left-0 right-0 z-40 h-12 bg-[#09090B] border-b border-[#27272A] flex items-center px-6 gap-4">
-        <button
-          onClick={() => setActiveTab("api")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "api"
-              ? "bg-[#27272A] text-[#FAFAFA]"
-              : "text-[#71717A] hover:text-[#A1A1AA] hover:bg-[#18181B]"
-          }`}
-          data-testid="tab-api"
-        >
-          <BookOpen className="w-4 h-4" />
-          API Reference
-        </button>
-        <button
-          onClick={() => setActiveTab("sdk")}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-            activeTab === "sdk"
-              ? "bg-[#27272A] text-[#FAFAFA]"
-              : "text-[#71717A] hover:text-[#A1A1AA] hover:bg-[#18181B]"
-          }`}
-          data-testid="tab-sdk"
-        >
-          <Code2 className="w-4 h-4" />
-          SDK Guide
-        </button>
-      </div>
-
-      {/* TOC Sidebar - Only show for API tab */}
-      {activeTab === "api" && (
+      {/* TOC Sidebar */}
       <aside
-        className="fixed left-0 top-26 bottom-0 w-56 bg-[#09090B] border-r border-[#27272A] overflow-y-auto py-4 px-3 z-40"
+        className="fixed left-0 top-14 bottom-0 w-56 bg-[#09090B] border-r border-[#27272A] overflow-y-auto py-4 px-3 z-40"
         data-testid="docs-toc"
       >
         {Object.entries(groups).map(([group, eps]) => (
@@ -406,11 +372,9 @@ export default function DocsPage() {
           </div>
         ))}
       </aside>
-      )}
 
       {/* Main content */}
-      <main ref={mainRef} className={`pt-26 min-h-screen ${activeTab === "api" ? "ml-56" : "ml-0"}`} data-testid="docs-main">
-        {activeTab === "api" ? (
+      <main ref={mainRef} className="ml-56 pt-14 min-h-screen" data-testid="docs-main">
         <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
           {/* Intro */}
           <div className="mb-4">
@@ -448,41 +412,6 @@ export default function DocsPage() {
             </div>
           )}
         </div>
-        ) : (
-        <div className="max-w-4xl mx-auto px-8 py-8">
-          <div className="prose prose-invert prose-sm max-w-none">
-            {config.sdkDocs ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
-                components={{
-                  h1: ({node, ...props}) => <h1 className="text-3xl font-bold text-[#FAFAFA] mb-4 mt-8" {...props} />,
-                  h2: ({node, ...props}) => <h2 className="text-2xl font-semibold text-[#FAFAFA] mb-3 mt-6 border-b border-[#27272A] pb-2" {...props} />,
-                  h3: ({node, ...props}) => <h3 className="text-xl font-medium text-[#FAFAFA] mb-2 mt-4" {...props} />,
-                  p: ({node, ...props}) => <p className="text-[#A1A1AA] mb-4 leading-7" {...props} />,
-                  code: ({node, inline, ...props}) => inline ? (
-                    <code className="text-[#2563EB] bg-[#2563EB]/10 px-1.5 py-0.5 rounded text-sm font-mono" {...props} />
-                  ) : (
-                    <code className="block bg-[#0d1117] text-[#c9d1d9] p-4 rounded-lg overflow-x-auto text-sm font-mono" {...props} />
-                  ),
-                  pre: ({node, ...props}) => <pre className="bg-[#0d1117] rounded-lg overflow-hidden mb-4" {...props} />,
-                  ul: ({node, ...props}) => <ul className="list-disc list-inside text-[#A1A1AA] mb-4 space-y-2" {...props} />,
-                  ol: ({node, ...props}) => <ol className="list-decimal list-inside text-[#A1A1AA] mb-4 space-y-2" {...props} />,
-                  li: ({node, ...props}) => <li className="text-[#A1A1AA] ml-4" {...props} />,
-                  a: ({node, ...props}) => <a className="text-[#2563EB] hover:text-[#3B82F6] underline" {...props} />,
-                  blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-[#27272A] pl-4 italic text-[#71717A] my-4" {...props} />,
-                }}
-              />
-            ) : (
-              <div className="text-center py-20">
-                <Code2 className="w-12 h-12 text-[#3F3F46] mx-auto mb-4" />
-                <p className="text-[#FAFAFA] font-medium mb-1">SDK Documentation Coming Soon</p>
-                <p className="text-[#71717A] text-sm">SDK docs will be generated when you deploy this project.</p>
-              </div>
-            )}
-          </div>
-        </div>
-        )}
       </main>
     </div>
   );
