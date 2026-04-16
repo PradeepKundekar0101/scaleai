@@ -233,7 +233,7 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     response_data = None
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:
             body = None
             if request.method in ("POST", "PUT", "PATCH"):
                 body = await request.body()
@@ -254,8 +254,8 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
         upstream_status = 502
         response_data = {"error": "backend_unreachable", "message": "The upstream service is not responding"}
     except httpx.TimeoutException:
-        upstream_status = 504
-        response_data = {"error": "backend_timeout", "message": "The upstream service took too long to respond"}
+        upstream_status = 502
+        response_data = {"error": "backend_unreachable", "message": "The upstream service did not respond in time"}
     except Exception as e:
         upstream_status = 502
         response_data = {"error": "backend_unreachable", "message": f"Error contacting upstream: {str(e)}"}

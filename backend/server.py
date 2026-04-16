@@ -1078,7 +1078,7 @@ async def get_docs_config(slug: str):
     gateway_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
 
     return {
-        "projectName": project.get("name", ""),
+        "projectName": project.get("name") or slug,
         "slug": slug,
         "gatewayUrl": gateway_url,
         "defaultApiKey": project.get("default_api_key", ""),
