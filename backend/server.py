@@ -31,7 +31,12 @@ ROOT_DIR = Path(__file__).parent
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+)
 db = client[os.environ['DB_NAME']]
 
 # JWT config
