@@ -148,7 +148,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8" data-testid="dashboard-header">
         <div>
-          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]">Your Projects</h1>
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold font-heading tracking-tight leading-[0.96]">Your Projects</h1>
           <p className="text-[var(--text-primary)]/50 text-sm mt-1.5">Manage your API gateways and platforms</p>
         </div>
         <Button

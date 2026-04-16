@@ -113,7 +113,7 @@ export default function LandingPage() {
             <Zap className="w-3.5 h-3.5 text-[#cbb7fb]" />
             <span className="text-white/80 text-sm font-medium">AI-Powered Platform Conversion</span>
           </div>
-          <h1 className="text-5xl md:text-7xl font-semibold text-white leading-[0.96] tracking-tight mb-6">
+          <h1 className="text-5xl md:text-7xl font-semibold font-heading text-white leading-[0.96] tracking-tight mb-6">
             Turn any SaaS<br />into a Platform
           </h1>
           <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed">
@@ -143,7 +143,7 @@ export default function LandingPage() {
       {/* How it Works */}
       <section className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-4xl font-semibold text-[#292827] leading-[0.96] tracking-tight text-center mb-4">
+          <h2 className="text-4xl font-semibold font-heading text-[#292827] leading-[0.96] tracking-tight text-center mb-4">
             How it works
           </h2>
           <p className="text-center text-[#292827]/60 text-lg mb-16 max-w-xl mx-auto">
@@ -189,7 +189,7 @@ export default function LandingPage() {
       {/* Features */}
       <section className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-4xl font-semibold text-[#292827] leading-[0.96] tracking-tight text-center mb-4">
+          <h2 className="text-4xl font-semibold font-heading text-[#292827] leading-[0.96] tracking-tight text-center mb-4">
             Everything you need
           </h2>
           <p className="text-center text-[#292827]/60 text-lg mb-16 max-w-xl mx-auto">
@@ -215,7 +215,7 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="py-24 px-6">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="text-4xl font-semibold text-[#292827] leading-[0.96] tracking-tight mb-5">
+          <h2 className="text-4xl font-semibold font-heading text-[#292827] leading-[0.96] tracking-tight mb-5">
             Ready to become a platform?
           </h2>
           <p className="text-[#292827]/60 text-lg mb-8">

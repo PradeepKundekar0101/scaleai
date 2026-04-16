@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
   	extend: {
+		fontFamily: {
+			sans: ["'Stack Sans Text'", 'system-ui', '-apple-system', 'sans-serif'],
+			heading: ["'Playfair Display'", 'Georgia', 'serif'],
+		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',

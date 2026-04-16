@@ -504,7 +504,7 @@ export default function EndpointsPage() {
                 <Rocket className="w-5 h-5 text-[var(--accent-primary)]" />
               </div>
               <div>
-                <h2 className="text-[var(--text-primary)] font-semibold text-2xl leading-[0.96]">Your SaaS is Now a Platform</h2>
+                <h2 className="text-[var(--text-primary)] font-semibold font-heading text-2xl leading-[0.96]">Your SaaS is Now a Platform</h2>
                 <p className="text-[var(--text-primary)]/50 text-sm mt-1">{project?.name} is live</p>
               </div>
             </div>
@@ -632,7 +632,7 @@ export default function EndpointsPage() {
 
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]" data-testid="endpoints-title">
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold font-heading tracking-tight leading-[0.96]" data-testid="endpoints-title">
             Configure Public API
           </h1>
           <p className="text-[var(--text-primary)]/50 text-sm mt-1.5">{project?.name || "Project"}</p>

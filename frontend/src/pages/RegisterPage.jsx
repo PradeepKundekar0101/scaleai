@@ -37,7 +37,7 @@ export default function RegisterPage() {
         <div className="absolute inset-0 bg-gradient-to-tr from-[#1b1938]/40 via-transparent to-[#1b1938]/30" />
         <div className="absolute bottom-0 left-0 right-0 p-10">
           <div className="backdrop-blur-md bg-black/20 border border-white/10 rounded-2xl p-6 max-w-sm">
-            <h2 className="text-2xl font-semibold text-white leading-tight tracking-tight mb-2">
+            <h2 className="text-2xl font-semibold font-heading text-white leading-tight tracking-tight mb-2">
               Start building<br />your platform
             </h2>
             <p className="text-white/70 text-sm leading-relaxed">
@@ -55,7 +55,7 @@ export default function RegisterPage() {
             <span className="text-[#292827] font-semibold text-xl tracking-tight">Scalable</span>
           </Link>
 
-          <h1 className="text-3xl font-semibold text-[#292827] leading-[0.96] tracking-tight mb-2">Create your account</h1>
+          <h1 className="text-3xl font-semibold font-heading text-[#292827] leading-[0.96] tracking-tight mb-2">Create your account</h1>
           <p className="text-[#292827]/50 text-sm mb-8">Get started with Scalable in seconds</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">

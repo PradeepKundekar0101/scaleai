@@ -150,7 +150,7 @@ export default function AnalyticsPage() {
         </button>
 
         <div className="mb-8">
-          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]" data-testid="analytics-title">
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold font-heading tracking-tight leading-[0.96]" data-testid="analytics-title">
             API Analytics
           </h1>
           <p className="text-[var(--text-primary)]/50 text-sm mt-1.5">{project?.name}</p>

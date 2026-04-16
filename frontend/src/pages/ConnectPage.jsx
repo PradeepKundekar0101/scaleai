@@ -249,7 +249,7 @@ export default function ConnectPage() {
       <div className="max-w-2xl mx-auto" data-testid="connect-page">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]">Connect Your Repository</h1>
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold font-heading tracking-tight leading-[0.96]">Connect Your Repository</h1>
           <p className="text-[var(--text-secondary)] text-sm mt-1.5">
             Our AI agents will scan your codebase and discover every API route
           </p>

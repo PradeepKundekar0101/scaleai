@@ -58,7 +58,8 @@
   --radius-lg: 24px;
   --radius-xl: 28px;
   
-  --font: 'Waldenburg', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font: 'Stack Sans Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
 }
 
 .dark {
