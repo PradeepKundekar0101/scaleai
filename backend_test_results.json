@@ -1,0 +1,92 @@
+{
+  "timestamp": "2026-04-16T08:29:28.950463",
+  "total_tests": 14,
+  "passed_tests": 14,
+  "success_rate": "100.0%",
+  "results": [
+    {
+      "test": "POST /api/auth/register",
+      "success": true,
+      "details": "User created with ID: 69e09de79cc890cc10172ed2",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/auth/me",
+      "success": true,
+      "details": "User info retrieved: test_082927@example.com",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/projects",
+      "success": true,
+      "details": "Project created with ID: 69e09de89cc890cc10172ed3",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/projects",
+      "success": true,
+      "details": "Retrieved 1 projects",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/projects/:id",
+      "success": true,
+      "details": "Project retrieved: Test Project 082927",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/projects/69e09de89cc890cc10172ed3/scan",
+      "success": true,
+      "details": "Returns 501 as expected",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/projects/69e09de89cc890cc10172ed3/routes",
+      "success": true,
+      "details": "Returns 501 as expected",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/auth/logout",
+      "success": true,
+      "details": "Logout successful",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/auth/login",
+      "success": true,
+      "details": "Admin login successful",
+      "response_data": null
+    },
+    {
+      "test": "Unauthorized GET /api/auth/me",
+      "success": true,
+      "details": "Returns 401 as expected",
+      "response_data": null
+    },
+    {
+      "test": "Unauthorized GET /api/projects",
+      "success": true,
+      "details": "Returns 401 as expected",
+      "response_data": null
+    },
+    {
+      "test": "Unauthorized POST /api/projects",
+      "success": true,
+      "details": "Returns 401 as expected",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/auth/github",
+      "success": true,
+      "details": "GitHub OAuth stub returns 501",
+      "response_data": null
+    },
+    {
+      "test": "GET /api/auth/github/callback",
+      "success": true,
+      "details": "GitHub OAuth stub returns 501",
+      "response_data": null
+    }
+  ]
+}
