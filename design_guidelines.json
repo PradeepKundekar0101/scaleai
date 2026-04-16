@@ -1,0 +1,82 @@
+{
+  "theme": {
+    "mode": "dark",
+    "archetype": "4 (Swiss & High-Contrast)"
+  },
+  "colors": {
+    "background": "#09090B",
+    "card": "#0F0F12",
+    "elevated": "#18181B",
+    "border": "#27272A",
+    "accent": "#2563EB",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "text_muted": "#71717A"
+  },
+  "typography": {
+    "font_family_body": "Inter, Geist, sans-serif",
+    "font_family_heading": "Inter, Geist, sans-serif",
+    "font_family_mono": "Geist Mono, JetBrains Mono, monospace",
+    "rules": {
+      "headings": "tracking-tight, font-medium to font-semibold. Never use font-black. No uppercase display fonts.",
+      "body": "leading-relaxed, text-sm for dashboard density. Minimal line height.",
+      "code": "text-xs, tracking-tight, text-[#2563EB] or text-zinc-300 bg-[#18181B] border border-[#27272A] px-1.5 py-0.5 rounded-sm"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Linear/Vercel aesthetic. Dense, precise, highly functional, unopinionated.",
+    "sidebar_width": "256px",
+    "corners": "rounded-none or max rounded-sm. Absolutely no bubbly/large rounded shapes (no rounded-lg/xl/full unless it's an avatar).",
+    "borders": "1px solid #27272A on almost all container edges to define structure.",
+    "shadows": "No soft shadows. Use elevation via background colors (#18181B) or hard 1px borders. Flat UI.",
+    "spacing_scale": "Tight spacing for dashboard components (p-4, p-6), precise optical alignment."
+  },
+  "components_strategy": {
+    "buttons": "Flat, sharp corners. Primary button: bg-[#2563EB] text-white hover:bg-blue-700. Secondary: bg-transparent border border-[#27272A] text-zinc-300 hover:bg-[#18181B].",
+    "cards": "bg-[#0F0F12] border border-[#27272A] rounded-sm p-5 or p-6. Hover effect: border-zinc-600 transition-colors duration-200.",
+    "inputs": "bg-[#09090B] border border-[#27272A] rounded-sm text-sm focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] outline-none placeholder:text-zinc-600.",
+    "badges": "Status badges must be minimal and sharp. Live: text-emerald-400 bg-emerald-400/10 border border-emerald-400/20. Draft: text-zinc-400 bg-zinc-800/50 border border-zinc-700. Scanning: text-[#2563EB] bg-blue-500/10 border border-[#2563EB]/30.",
+    "modals": "Dialog overlay bg-black/80 backdrop-blur-sm. Dialog content bg-[#0F0F12] border border-[#27272A] rounded-sm.",
+    "icons": "Lucide React icons. Stroke width 1.5 or 2. Size 16px or 18px for density.",
+    "avatar": "Square or slightly rounded (rounded-sm) instead of perfect circle to match the sharp aesthetic, or minimal text-based avatar."
+  },
+  "page_specific_guidelines": {
+    "auth_pages": {
+      "layout": "Split screen. 50% width form on pure black/bg (#09090B), 50% visual showcase on right.",
+      "visual_side": "Use the provided abstract geometric tech background image. Full cover, subtle opacity.",
+      "form": "Minimal, dense. Left-aligned text. Simple inputs."
+    },
+    "dashboard_layout": {
+      "sidebar": "Fixed left, exactly 256px wide, bg-[#09090B] border-r border-[#27272A]. Navigation items with minimal hover state (bg-[#18181B]). Active state text-white bg-[#18181B] with a left #2563EB border accent, inactive text-zinc-400.",
+      "main_content": "margin-left: 256px. min-h-screen bg-[#09090B]. Container max-w-6xl mx-auto p-8.",
+      "header": "Top of main content. Includes breadcrumbs (e.g., Scalable / Projects), subtle text."
+    },
+    "projects_grid": {
+      "layout": "CSS Grid, gap-6, grid-cols-1 md:grid-cols-2 lg:grid-cols-3.",
+      "empty_state": "Dashed border border-[#27272A], flex-col center, muted text, minimal 'Create Project' button."
+    }
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/667b9152-5f4f-4a8b-9879-e37549147a68/images/3596d8db7222c5b8865a8e5ce33c540e159427de5b208e947897b68f2e51b4ac.png",
+        "description": "Minimalist abstract dark geometric pattern, subtle 3d grid",
+        "category": "auth_background"
+      },
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/667b9152-5f4f-4a8b-9879-e37549147a68/images/95258b6860400655d16c62e09d214a8dcd9aa398c084933ca6ea3caf50b5220d.png",
+        "description": "Minimalist 3D cube structure in dark void, technical and precise",
+        "category": "auth_background_alternate"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "UPDATE index.css variables to match the exact hex codes provided: replace root and dark mode variables to map to these hex values or use Tailwind arbitrary values (e.g., bg-[#09090B], border-[#27272A]) everywhere.",
+    "Since Tailwind config has dark mode 'class', ensure the 'dark' class is applied to the root html or body element. Or force dark mode by defaulting to dark classes.",
+    "Do NOT use soft shadows (shadow-lg, shadow-xl). Rely purely on 1px borders and background color differentiation for depth. Remove all Shadcn default shadows if any.",
+    "Ensure ALL interactive elements (buttons, inputs, links, dialog triggers) have `data-testid` attributes (e.g., data-testid='login-button', data-testid='project-card-1').",
+    "For the sidebar, it MUST be exactly 256px wide and persist across all authenticated pages. Use fixed positioning (w-64) and offset the main content (ml-64).",
+    "Fonts: apply 'font-sans' with Inter/Geist. Apply 'font-mono' for any API keys, paths, or code snippets.",
+    "No gradients allowed. Flat backgrounds only. No bubbly shapes, strictly rounded-sm or rounded-none for all components (cards, buttons, inputs, dialogs)."
+  ]
+}
