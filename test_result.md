@@ -193,6 +193,30 @@ frontend:
         - agent: "main"
         - comment: "7-step deploy animation. Frontend polls /deploy-status every 2s. Shows npm publish status in success screen."
 
+  - task: "Persist agent streaming responses on scan complete"
+    implemented: true
+    working: true
+    file: "pages/ConnectPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Agent streaming logs now persist in a collapsible dark card above the scan results. Shows step count and all agent messages. Collapsible via chevron toggle."
+
+  - task: "Donut chart for route risk distribution"
+    implemented: true
+    working: true
+    file: "pages/ConnectPage.jsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+        - working: true
+        - agent: "main"
+        - comment: "Replaced simple colored dots with Recharts PieChart donut. Shows green/amber/red segments with center total count, and legend with counts + percentages."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"

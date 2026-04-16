@@ -5,8 +5,9 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, CheckCircle2, Loader2, Circle, ArrowRight } from "lucide-react";
+import { Search, CheckCircle2, Loader2, Circle, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 function TypewriterText({ text, speed = 20 }) {
   const [displayedText, setDisplayedText] = useState("");
@@ -87,6 +88,7 @@ export default function ConnectPage() {
   const [state, setState] = useState("input"); // input | scanning | complete
   const [scanResult, setScanResult] = useState(null);
   const [repoName, setRepoName] = useState("");
+  const [showAgentLogs, setShowAgentLogs] = useState(true);
 
   // Step statuses and streaming messages
   const [steps, setSteps] = useState({
@@ -331,45 +333,151 @@ export default function ConnectPage() {
 
         {/* State 3: Complete */}
         {state === "complete" && scanResult && (
-          <div
-            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm"
-            data-testid="connect-complete-state"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-[var(--text-primary)] font-semibold text-lg">Scan Complete</h2>
+          <div className="space-y-4" data-testid="connect-complete-state">
+            {/* Persisted Agent Steps (collapsible) */}
+            {(steps.codeAnalyst.messages.length > 0 || steps.securityAuditor.messages.length > 0 || steps.riskAssessment.messages.length > 0) && (
+              <div className="bg-[#0F0F12] border border-[#27272A] rounded-2xl overflow-hidden shadow-sm">
+                <button
+                  onClick={() => setShowAgentLogs(!showAgentLogs)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#18181B] transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span className="text-[#FAFAFA] font-medium text-sm">
+                      AI Agent Analysis Log
+                    </span>
+                    <span className="text-[#52525B] text-xs">
+                      {steps.codeAnalyst.messages.length + steps.securityAuditor.messages.length + steps.riskAssessment.messages.length} steps completed
+                    </span>
+                  </div>
+                  {showAgentLogs ? (
+                    <ChevronUp className="w-4 h-4 text-[#71717A]" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-[#71717A]" />
+                  )}
+                </button>
+                
+                {showAgentLogs && (
+                  <div className="px-6 pb-5 border-t border-[#27272A]">
+                    <div className="space-y-1 pt-3">
+                      <StepIndicator
+                        agent="Code Analyst Agent"
+                        status="complete"
+                        messages={steps.codeAnalyst.messages}
+                      />
+                      <StepIndicator
+                        agent="Security Auditor Agent"
+                        status="complete"
+                        messages={steps.securityAuditor.messages}
+                      />
+                      <StepIndicator
+                        agent="Risk Assessment"
+                        status="complete"
+                        messages={steps.riskAssessment.messages}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scan Results Card with Donut Chart */}
+            <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm">
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-[var(--text-primary)] font-semibold text-lg">Scan Complete</h2>
+              </div>
+
+              <p className="text-[var(--text-secondary)] text-sm mb-6">
+                Discovered <span className="text-[var(--text-primary)] font-semibold">{scanResult.routeCount}</span> routes in{" "}
+                <span className="font-mono text-[var(--accent-primary)]">{repoName}</span>
+              </p>
+
+              {/* Donut Chart + Legend */}
+              {(() => {
+                const green = scanResult.breakdown?.green || 0;
+                const yellow = scanResult.breakdown?.yellow || 0;
+                const red = scanResult.breakdown?.red || 0;
+                const total = green + yellow + red;
+                const chartData = [
+                  { name: "Safe", value: green, color: "#059669" },
+                  { name: "Need Review", value: yellow, color: "#F59E0B" },
+                  { name: "Blocked", value: red, color: "#EF4444" },
+                ].filter(d => d.value > 0);
+
+                return (
+                  <div className="flex items-center gap-8 mb-8">
+                    {/* Donut Chart */}
+                    <div className="relative w-[160px] h-[160px] shrink-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={45}
+                            outerRadius={72}
+                            paddingAngle={3}
+                            dataKey="value"
+                            stroke="none"
+                            startAngle={90}
+                            endAngle={-270}
+                          >
+                            {chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Center label */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-2xl font-bold text-[var(--text-primary)]">{total}</span>
+                        <span className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">Routes</span>
+                      </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center gap-3" data-testid="scan-green-count">
+                        <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">{green} Safe</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {total > 0 ? Math.round((green / total) * 100) : 0}% of routes
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3" data-testid="scan-yellow-count">
+                        <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">{yellow} Need Review</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {total > 0 ? Math.round((yellow / total) * 100) : 0}% of routes
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3" data-testid="scan-red-count">
+                        <span className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-[var(--text-primary)]">{red} Blocked</span>
+                          <span className="text-xs text-[var(--text-tertiary)]">
+                            {total > 0 ? Math.round((red / total) * 100) : 0}% of routes
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <Button
+                onClick={() => navigate(`/endpoints/${projectId}`)}
+                data-testid="configure-endpoints-btn"
+                className="bg-[var(--text-primary)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold h-10 px-5"
+              >
+                Configure Endpoints <ArrowRight className="w-4 h-4 ml-1.5" />
+              </Button>
             </div>
-
-            <p className="text-[var(--text-secondary)] text-sm mb-6">
-              Discovered <span className="text-[var(--text-primary)] font-semibold">{scanResult.routeCount}</span> routes in{" "}
-              <span className="font-mono text-[var(--accent-primary)]">{repoName}</span>
-            </p>
-
-            <div className="flex items-center gap-6 mb-8">
-              <div className="flex items-center gap-2" data-testid="scan-green-count">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.green || 0}</span>
-                <span className="text-sm text-[var(--text-secondary)]">Safe</span>
-              </div>
-              <div className="flex items-center gap-2" data-testid="scan-yellow-count">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.yellow || 0}</span>
-                <span className="text-sm text-[var(--text-secondary)]">Need Review</span>
-              </div>
-              <div className="flex items-center gap-2" data-testid="scan-red-count">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.red || 0}</span>
-                <span className="text-sm text-[var(--text-secondary)]">Blocked</span>
-              </div>
-            </div>
-
-            <Button
-              onClick={() => navigate(`/endpoints/${projectId}`)}
-              data-testid="configure-endpoints-btn"
-              className="bg-[var(--text-primary)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold h-10 px-5"
-            >
-              Configure Endpoints <ArrowRight className="w-4 h-4 ml-1.5" />
-            </Button>
           </div>
         )}
       </div>
