@@ -8,8 +8,7 @@ bcrypt>=4.0
 PyJWT>=2.0
 python-multipart>=0.0.20
 httpx>=0.28
-litellm>=1.80
-openai>=1.0
+anthropic>=0.43
 requests>=2.31
 starlette==0.37.2
 email-validator>=2.0

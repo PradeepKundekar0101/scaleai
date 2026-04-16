@@ -1,60 +1,24 @@
 """
 AI agents for code analysis and security auditing.
-Uses Emergent LLM key with Claude Sonnet via emergentintegrations.
+Uses Anthropic Python SDK to call Claude directly.
 Falls back to hardcoded demo results on failure.
 """
 import os
 import json
 import re
 import logging
-import uuid
 import asyncio
-
-# Force OpenAI client to use short timeout and no retries BEFORE any import
-os.environ.setdefault("OPENAI_TIMEOUT", "30")
-os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
 
 from demo_scan_results import DEMO_CODE_ANALYSIS, DEMO_SECURITY_AUDIT
 
 logger = logging.getLogger(__name__)
 
 try:
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    _HAS_EMERGENT = True
-    # Configure litellm to use short timeouts and no retries for deploy speed
-    try:
-        import litellm
-        litellm.request_timeout = 30
-        litellm.num_retries = 0
-    except ImportError:
-        pass
-    # Monkey-patch openai client to prevent internal retries
-    try:
-        import openai
-        openai.DEFAULT_MAX_RETRIES = 0
-        openai.DEFAULT_TIMEOUT = 30.0
-        # Also patch the class defaults
-        if hasattr(openai, 'AsyncOpenAI'):
-            _orig_async_init = openai.AsyncOpenAI.__init__
-            def _patched_async_init(self, *args, **kwargs):
-                kwargs.setdefault('max_retries', 0)
-                kwargs.setdefault('timeout', 30.0)
-                _orig_async_init(self, *args, **kwargs)
-            openai.AsyncOpenAI.__init__ = _patched_async_init
-        if hasattr(openai, 'OpenAI'):
-            _orig_sync_init = openai.OpenAI.__init__
-            def _patched_sync_init(self, *args, **kwargs):
-                kwargs.setdefault('max_retries', 0)
-                kwargs.setdefault('timeout', 30.0)
-                _orig_sync_init(self, *args, **kwargs)
-            openai.OpenAI.__init__ = _patched_sync_init
-        logger.info("Patched openai client: max_retries=0, timeout=30s")
-    except (ImportError, AttributeError, Exception) as e:
-        logger.warning(f"Could not patch openai client: {e}")
+    import anthropic
+    _HAS_ANTHROPIC = True
 except ImportError:
-    _HAS_EMERGENT = False
-    LlmChat = None
-    UserMessage = None
+    _HAS_ANTHROPIC = False
+    logger.warning("anthropic package not installed — AI features will use demo fallback")
 
 CODE_ANALYST_SYSTEM_PROMPT = """You are a Code Analyst Agent for Scalable, a platform that helps SaaS companies expose their internal APIs as public APIs.
 
@@ -169,50 +133,46 @@ def extract_json(text: str) -> dict:
     raise ValueError("Could not extract valid JSON from response")
 
 
-async def call_claude(system_prompt: str, user_message: str) -> dict:
-    """Call Claude via emergentintegrations with retry. Returns parsed JSON."""
-    if not _HAS_EMERGENT:
-        raise ImportError("emergentintegrations is not installed")
-    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+MODEL = "claude-sonnet-4-20250514"
+
+
+def _get_anthropic_client() -> "anthropic.AsyncAnthropic":
+    if not _HAS_ANTHROPIC:
+        raise ImportError("anthropic package is not installed")
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        raise ValueError("EMERGENT_LLM_KEY not set")
+        raise ValueError("ANTHROPIC_API_KEY not set")
+    return anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0, max_retries=1)
 
+
+async def call_claude(system_prompt: str, user_message: str) -> dict:
+    """Call Claude via Anthropic SDK. Returns parsed JSON."""
+    client = _get_anthropic_client()
     try:
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"scalable-scan-{uuid.uuid4().hex[:8]}",
-            system_message=system_prompt,
+        response = await client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
         )
-        chat.with_model("anthropic", "claude-4-sonnet-20250514")
-
-        msg = UserMessage(text=user_message)
-        response = await chat.send_message(msg)
-
-        return extract_json(response)
+        text = response.content[0].text
+        return extract_json(text)
     except Exception as e:
         logger.error(f"Claude API failed: {e}")
         raise
 
 
 async def call_claude_text(system_prompt: str, user_message: str) -> str:
-    """Call Claude via emergentintegrations with retry. Returns raw text."""
-    if not _HAS_EMERGENT:
-        raise ImportError("emergentintegrations is not installed")
-    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
-    if not api_key:
-        raise ValueError("EMERGENT_LLM_KEY not set")
-
+    """Call Claude via Anthropic SDK. Returns raw text."""
+    client = _get_anthropic_client()
     try:
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"scalable-sdk-{uuid.uuid4().hex[:8]}",
-            system_message=system_prompt,
+        response = await client.messages.create(
+            model=MODEL,
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
         )
-        chat.with_model("anthropic", "claude-4-sonnet-20250514")
-
-        msg = UserMessage(text=user_message)
-        response = await chat.send_message(msg)
-        return response
+        return response.content[0].text
     except Exception as e:
         logger.error(f"Claude text API failed: {e}")
         raise
@@ -327,8 +287,6 @@ async def generate_openapi_spec_ai(project_name: str, gateway_url: str, endpoint
     ep_json = json.dumps(endpoints)
     script = f'''
 import os, json, sys, asyncio
-os.environ["OPENAI_MAX_RETRIES"] = "0"
-os.environ["OPENAI_TIMEOUT"] = "25"
 sys.path.insert(0, "/app/backend")
 from ai_agents import call_claude, OPENAPI_SCHEMA_DESIGNER_PROMPT
 prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{{projectName}}", {repr(project_name)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
@@ -347,7 +305,7 @@ asyncio.run(run())
         result = subprocess.run(
             ["python3", script_path],
             capture_output=True, text=True, timeout=40,
-            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+            env={**os.environ}
         )
         os.unlink(script_path)
 
@@ -377,8 +335,6 @@ async def generate_sdk_ai(project_name: str, gateway_url: str, endpoints: list) 
     ep_json = json.dumps(endpoints)
     script = f'''
 import os, json, sys, asyncio
-os.environ["OPENAI_MAX_RETRIES"] = "0"
-os.environ["OPENAI_TIMEOUT"] = "25"
 sys.path.insert(0, "/app/backend")
 from ai_agents import call_claude_text, SDK_GENERATOR_PROMPT
 prompt = SDK_GENERATOR_PROMPT.replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
@@ -397,7 +353,7 @@ asyncio.run(run())
         result = subprocess.run(
             ["python3", script_path],
             capture_output=True, text=True, timeout=40,
-            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+            env={**os.environ}
         )
         os.unlink(script_path)
 
@@ -428,8 +384,6 @@ async def generate_sdk_docs_ai(project_name: str, project_slug: str, gateway_url
     ep_json = json.dumps(endpoints)
     script = f'''
 import os, json, sys, asyncio
-os.environ["OPENAI_MAX_RETRIES"] = "0"
-os.environ["OPENAI_TIMEOUT"] = "25"
 sys.path.insert(0, "/app/backend")
 from ai_agents import call_claude_text, SDK_DOCS_GENERATOR_PROMPT
 prompt = SDK_DOCS_GENERATOR_PROMPT.replace("{{projectSlug}}", {repr(project_slug)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
@@ -448,7 +402,7 @@ asyncio.run(run())
         result = subprocess.run(
             ["python3", script_path],
             capture_output=True, text=True, timeout=40,
-            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+            env={**os.environ}
         )
         os.unlink(script_path)
 
