@@ -23,7 +23,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("scalable_token");
       const path = window.location.pathname;
-      if (path !== "/login" && path !== "/register" && !path.startsWith("/docs/")) {
+      if (path !== "/login" && path !== "/register" && path !== "/landing" && !path.startsWith("/docs/")) {
         window.location.href = "/login";
       }
     }
