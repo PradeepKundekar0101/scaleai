@@ -8,12 +8,23 @@ import json
 import re
 import logging
 import uuid
+import asyncio
+
+# Force OpenAI client to use short timeout and no retries BEFORE any import
+os.environ.setdefault("OPENAI_TIMEOUT", "30")
+os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
 
 from demo_scan_results import DEMO_CODE_ANALYSIS, DEMO_SECURITY_AUDIT
 
 try:
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     _HAS_EMERGENT = True
+    try:
+        import litellm
+        litellm.request_timeout = 30
+        litellm.num_retries = 0
+    except ImportError:
+        pass
 except ImportError:
     _HAS_EMERGENT = False
     LlmChat = None
@@ -142,26 +153,21 @@ async def call_claude(system_prompt: str, user_message: str) -> dict:
     if not api_key:
         raise ValueError("EMERGENT_LLM_KEY not set")
 
-    for attempt in range(2):
-        try:
-            chat = LlmChat(
-                api_key=api_key,
-                session_id=f"scalable-scan-{uuid.uuid4().hex[:8]}",
-                system_message=system_prompt,
-            )
-            chat.with_model("anthropic", "claude-4-sonnet-20250514")
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"scalable-scan-{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt,
+        )
+        chat.with_model("anthropic", "claude-4-sonnet-20250514")
 
-            msg = UserMessage(text=user_message)
-            response = await chat.send_message(msg)
+        msg = UserMessage(text=user_message)
+        response = await chat.send_message(msg)
 
-            return extract_json(response)
-        except Exception as e:
-            logger.error(f"Claude API attempt {attempt + 1} failed: {e}")
-            if attempt == 0:
-                continue
-            raise
-
-    raise RuntimeError("Claude API failed after retries")
+        return extract_json(response)
+    except Exception as e:
+        logger.error(f"Claude API failed: {e}")
+        raise
 
 
 async def call_claude_text(system_prompt: str, user_message: str) -> str:
@@ -172,25 +178,20 @@ async def call_claude_text(system_prompt: str, user_message: str) -> str:
     if not api_key:
         raise ValueError("EMERGENT_LLM_KEY not set")
 
-    for attempt in range(2):
-        try:
-            chat = LlmChat(
-                api_key=api_key,
-                session_id=f"scalable-sdk-{uuid.uuid4().hex[:8]}",
-                system_message=system_prompt,
-            )
-            chat.with_model("anthropic", "claude-4-sonnet-20250514")
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"scalable-sdk-{uuid.uuid4().hex[:8]}",
+            system_message=system_prompt,
+        )
+        chat.with_model("anthropic", "claude-4-sonnet-20250514")
 
-            msg = UserMessage(text=user_message)
-            response = await chat.send_message(msg)
-            return response
-        except Exception as e:
-            logger.error(f"Claude text API attempt {attempt + 1} failed: {e}")
-            if attempt == 0:
-                continue
-            raise
-
-    raise RuntimeError("Claude text API failed after retries")
+        msg = UserMessage(text=user_message)
+        response = await chat.send_message(msg)
+        return response
+    except Exception as e:
+        logger.error(f"Claude text API failed: {e}")
+        raise
 
 
 async def analyze_code(files: dict) -> dict:
@@ -286,7 +287,7 @@ Endpoints to document:
 Remember: Fields listed in fieldsToStrip are REMOVED from responses automatically — do NOT include them in response schemas."""
 
     try:
-        result = await call_claude(prompt, user_msg)
+        result = await asyncio.wait_for(call_claude(prompt, user_msg), timeout=45)
         # Validate it's a proper OpenAPI spec
         if "openapi" in result and "paths" in result:
             logger.info(f"AI generated OpenAPI spec with {len(result.get('paths', {}))} paths")
@@ -294,6 +295,9 @@ Remember: Fields listed in fieldsToStrip are REMOVED from responses automaticall
         else:
             logger.warning("AI OpenAPI spec missing required fields")
             return None
+    except asyncio.TimeoutError:
+        logger.warning("AI OpenAPI generation timed out (45s)")
+        return None
     except Exception as e:
         logger.error(f"AI OpenAPI generation failed: {e}")
         return None
@@ -307,7 +311,7 @@ async def generate_sdk_ai(project_name: str, gateway_url: str, endpoints: list) 
     user_msg = f"""Generate a complete TypeScript SDK for the "{project_name}" API.
 
 Gateway Base URL: {gateway_url}
-Package will be published as: @scalable/{project_name.lower().replace(' ', '-')}
+Package will be published as: @scalableai/{project_name.lower().replace(' ', '-')}
 
 Endpoints:
 {ep_description}
@@ -315,13 +319,16 @@ Endpoints:
 Create typed interfaces for all request/response objects based on the endpoint descriptions. The SDK should be production-ready with full type safety."""
 
     try:
-        result = await call_claude_text(prompt, user_msg)
+        result = await asyncio.wait_for(call_claude_text(prompt, user_msg), timeout=45)
         if result and len(result) > 100 and ("class" in result or "export" in result):
             logger.info(f"AI generated SDK ({len(result)} chars)")
             return result
         else:
             logger.warning("AI SDK response too short or invalid")
             return None
+    except asyncio.TimeoutError:
+        logger.warning("AI SDK generation timed out (45s)")
+        return None
     except Exception as e:
         logger.error(f"AI SDK generation failed: {e}")
         return None

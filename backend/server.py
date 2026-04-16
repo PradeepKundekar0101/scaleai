@@ -1,6 +1,11 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
+# Force OpenAI client short timeout + no retries (must be before any openai import)
+os.environ.setdefault("OPENAI_TIMEOUT", "30")
+os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
+
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient

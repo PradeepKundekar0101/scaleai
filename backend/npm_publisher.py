@@ -221,42 +221,58 @@ MIT
             timeout=60,
         )
 
-        if publish_result.returncode != 0:
-            stderr = publish_result.stderr
-            # If version already exists, try bumping
-            if "EPUBLISHCONFLICT" in stderr or "cannot publish over" in stderr or "previously published" in stderr:
-                logger.info("Version conflict, trying to bump patch version")
-                # Parse and bump version
-                parts = version.split(".")
-                parts[-1] = str(int(parts[-1]) + 1)
-                new_version = ".".join(parts)
+        combined_output = (publish_result.stdout or "") + (publish_result.stderr or "")
 
-                # Update package.json version
-                pkg_json["version"] = new_version
-                with open(os.path.join(tmp_dir, "package.json"), "w") as f:
-                    json.dump(pkg_json, f, indent=2)
+        # npm writes notices to stderr even on success. Check for actual success indicator
+        success_published = f"+ {package_name}@" in combined_output
 
-                publish_result = subprocess.run(
-                    ["npm", "publish", "--access", "public"],
-                    cwd=tmp_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
-                if publish_result.returncode == 0:
-                    logger.info(f"Published {package_name}@{new_version}")
-                    return {"success": True, "packageName": package_name, "version": new_version, "error": ""}
-                else:
-                    error_msg = publish_result.stderr[:500]
-                    logger.error(f"npm publish retry failed: {error_msg}")
-                    return {"success": False, "packageName": package_name, "version": new_version, "error": error_msg}
+        if success_published or publish_result.returncode == 0:
+            actual_version = version
+            # Try to extract actual version from output
+            import re as re_mod
+            ver_match = re_mod.search(rf'\+ {re_mod.escape(package_name)}@([\d.]+)', combined_output)
+            if ver_match:
+                actual_version = ver_match.group(1)
+            logger.info(f"Successfully published {package_name}@{actual_version}")
+            return {"success": True, "packageName": package_name, "version": actual_version, "error": ""}
 
-            error_msg = stderr[:500]
-            logger.error(f"npm publish failed: {error_msg}")
-            return {"success": False, "packageName": package_name, "version": version, "error": error_msg}
+        # Check for version conflict
+        if "EPUBLISHCONFLICT" in combined_output or "cannot publish over" in combined_output or "previously published" in combined_output:
+            logger.info("Version conflict, trying to bump patch version")
+            parts = version.split(".")
+            parts[-1] = str(int(parts[-1]) + 1)
+            new_version = ".".join(parts)
 
-        logger.info(f"Successfully published {package_name}@{version}")
-        return {"success": True, "packageName": package_name, "version": version, "error": ""}
+            pkg_json["version"] = new_version
+            with open(os.path.join(tmp_dir, "package.json"), "w") as f:
+                json.dump(pkg_json, f, indent=2)
+
+            publish_result = subprocess.run(
+                ["npm", "publish", "--access", "public"],
+                cwd=tmp_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            combined_output2 = (publish_result.stdout or "") + (publish_result.stderr or "")
+            success_retry = f"+ {package_name}@" in combined_output2 or publish_result.returncode == 0
+
+            if success_retry:
+                logger.info(f"Published {package_name}@{new_version}")
+                return {"success": True, "packageName": package_name, "version": new_version, "error": ""}
+            else:
+                error_msg = combined_output2[:500]
+                logger.error(f"npm publish retry failed: {error_msg}")
+                return {"success": False, "packageName": package_name, "version": new_version, "error": error_msg}
+
+        # Check if maybe it DID publish despite non-zero exit (npm quirk)
+        if f"📦  {package_name}@{version}" in combined_output:
+            logger.info(f"npm returned non-zero but package appears published: {package_name}@{version}")
+            return {"success": True, "packageName": package_name, "version": version, "error": ""}
+
+        error_msg = combined_output[:500]
+        logger.error(f"npm publish failed (rc={publish_result.returncode}): {error_msg}")
+        return {"success": False, "packageName": package_name, "version": version, "error": error_msg}
 
     except subprocess.TimeoutExpired:
         return {"success": False, "packageName": package_name, "version": version, "error": "npm publish timed out"}
