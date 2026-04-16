@@ -10,6 +10,7 @@ import ConnectPage from "@/pages/ConnectPage";
 import EndpointsPage from "@/pages/EndpointsPage";
 import KeysPage from "@/pages/KeysPage";
 import DocsPage from "@/pages/DocsPage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 function App() {
@@ -35,7 +36,7 @@ function App() {
           <Route path="/endpoints/:projectId" element={<ProtectedRoute><EndpointsPage /></ProtectedRoute>} />
           <Route path="/keys/:projectId" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
           <Route path="/docs/:slug" element={<DocsPage />} />
-          <Route path="/analytics/:projectId" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
+          <Route path="/analytics/:projectId" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
         </Routes>
       </AuthProvider>

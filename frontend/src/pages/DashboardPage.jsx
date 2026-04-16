@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, Box, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Box, ArrowRight, Loader2, Activity, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 function StatusBadge({ status }) {
@@ -40,6 +40,7 @@ function StatusBadge({ status }) {
 
 function ProjectCard({ project }) {
   const navigate = useNavigate();
+  const isLive = project.status === "live";
   return (
     <div
       data-testid={`project-card-${project.id}`}
@@ -56,11 +57,17 @@ function ProjectCard({ project }) {
         <h3 className="text-[#FAFAFA] font-medium text-base">{project.name}</h3>
         <StatusBadge status={project.status} />
       </div>
-      <p className="text-[#71717A] text-xs mb-4">
-        {project.endpointCount} endpoints &middot; {project.totalCalls} calls &middot; {project.avgLatency}ms avg
-      </p>
+      <div className="flex items-center gap-4 text-xs text-[#71717A] mb-4">
+        <span>{project.exposedEndpointCount || project.endpointCount || 0} endpoints</span>
+        {isLive && (
+          <>
+            <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{(project.totalCalls || 0).toLocaleString()} calls</span>
+            {project.avgLatency > 0 && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{project.avgLatency}ms</span>}
+          </>
+        )}
+      </div>
       <p className="font-mono text-xs text-[#3F3F46] truncate mb-4" data-testid={`project-slug-${project.id}`}>
-        {project.status === "live" ? `${process.env.REACT_APP_BACKEND_URL}/api/gateway/${project.slug}` : `gateway.scalable.dev/${project.slug}`}
+        {isLive ? `${process.env.REACT_APP_BACKEND_URL}/api/gateway/${project.slug}` : `gateway.scalable.dev/${project.slug}`}
       </p>
       <div className="flex items-center text-[#2563EB] text-sm font-medium group-hover:gap-2 transition-all duration-150">
         Manage <ArrowRight className="w-3.5 h-3.5 ml-1" />
@@ -151,8 +158,18 @@ export default function DashboardPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-24">
-          <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="dashboard-skeleton">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-5 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="h-5 w-32 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-5 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+              </div>
+              <div className="h-3 w-48 bg-[#18181B] rounded-sm animate-pulse" />
+              <div className="h-3 w-full bg-[#18181B] rounded-sm animate-pulse" />
+              <div className="h-4 w-20 bg-[#18181B] rounded-sm animate-pulse mt-2" />
+            </div>
+          ))}
         </div>
       ) : projects.length === 0 ? (
         <EmptyState onCreateClick={() => setModalOpen(true)} />

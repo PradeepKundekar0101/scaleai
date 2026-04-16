@@ -27,6 +27,7 @@ import {
   Key,
   BarChart3,
   BookOpen,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -382,8 +383,28 @@ export default function EndpointsPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex justify-center py-32">
-          <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin" />
+        <div data-testid="endpoints-loading" className="pb-24">
+          <div className="h-4 w-20 bg-[#18181B] rounded-sm animate-pulse mb-4" />
+          <div className="space-y-2 mb-6">
+            <div className="h-7 w-48 bg-[#18181B] rounded-sm animate-pulse" />
+            <div className="h-4 w-24 bg-[#18181B] rounded-sm animate-pulse" />
+          </div>
+          <div className="flex gap-3 mb-6">
+            {[80, 100, 70].map((w, i) => <div key={i} className="h-7 rounded-sm bg-[#18181B] animate-pulse" style={{ width: w }} />)}
+          </div>
+          <div className="bg-[#0F0F12] border border-[#27272A] rounded-sm overflow-hidden">
+            <div className="bg-[#18181B] h-10 border-b border-[#27272A]" />
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-3.5 border-b border-[#27272A]">
+                <div className="h-4 w-4 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-5 w-14 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-36 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 flex-1 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-8 bg-[#18181B] rounded-full animate-pulse" />
+                <div className="h-7 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+              </div>
+            ))}
+          </div>
         </div>
       </AppLayout>
     );
@@ -542,6 +563,15 @@ export default function EndpointsPage() {
   return (
     <AppLayout>
       <div data-testid="endpoints-page" className="pb-24">
+        {/* Back */}
+        <button
+          onClick={() => navigate("/")}
+          data-testid="endpoints-back-btn"
+          className="flex items-center gap-1.5 text-xs text-[#71717A] hover:text-[#FAFAFA] transition-colors mb-4"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+        </button>
+
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-[#FAFAFA] text-2xl font-semibold tracking-tight" data-testid="endpoints-title">

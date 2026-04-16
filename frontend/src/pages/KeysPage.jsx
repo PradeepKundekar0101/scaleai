@@ -20,6 +20,7 @@ import {
   Check,
   AlertTriangle,
   ShieldOff,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -124,8 +125,27 @@ export default function KeysPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex justify-center py-32">
-          <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin" />
+        <div data-testid="keys-loading" className="pb-12">
+          <div className="h-4 w-20 bg-[#18181B] rounded-sm animate-pulse mb-4" />
+          <div className="flex items-start justify-between mb-8">
+            <div className="space-y-2">
+              <div className="h-7 w-32 bg-[#18181B] rounded-sm animate-pulse" />
+              <div className="h-4 w-24 bg-[#18181B] rounded-sm animate-pulse" />
+            </div>
+            <div className="h-9 w-36 bg-[#18181B] rounded-sm animate-pulse" />
+          </div>
+          <div className="bg-[#0F0F12] border border-[#27272A] rounded-sm overflow-hidden">
+            <div className="bg-[#18181B] h-10 border-b border-[#27272A]" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center gap-6 px-4 py-4 border-b border-[#27272A]">
+                <div className="h-4 w-28 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-32 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-24 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-4 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+              </div>
+            ))}
+          </div>
         </div>
       </AppLayout>
     );
@@ -134,6 +154,15 @@ export default function KeysPage() {
   return (
     <AppLayout>
       <div data-testid="keys-page" className="pb-12">
+        {/* Back */}
+        <button
+          onClick={() => navigate(`/endpoints/${projectId}`)}
+          data-testid="keys-back-btn"
+          className="flex items-center gap-1.5 text-xs text-[#71717A] hover:text-[#FAFAFA] transition-colors mb-4"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to project
+        </button>
+
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -184,7 +213,8 @@ export default function KeysPage() {
             className="bg-[#0F0F12] border border-[#27272A] rounded-sm overflow-hidden"
             data-testid="keys-table"
           >
-            <table className="w-full">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="bg-[#18181B] border-b border-[#27272A]">
                   <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
@@ -263,6 +293,7 @@ export default function KeysPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </div>

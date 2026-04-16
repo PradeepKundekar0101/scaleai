@@ -311,7 +311,28 @@ async def create_project(body: ProjectCreateInput, user: dict = Depends(get_curr
 async def list_projects(user: dict = Depends(get_current_user)):
     cursor = db.projects.find({"user_id": ObjectId(user["id"])}).sort("created_at", -1)
     projects = await cursor.to_list(100)
-    return [serialize_project(p) for p in projects]
+    result = []
+    for p in projects:
+        proj = serialize_project(p)
+        slug = p.get("slug", "")
+        if p.get("status") == "live" and slug:
+            # Enrich with real usage stats
+            stats_pipeline = [
+                {"$match": {"project_slug": slug}},
+                {"$group": {
+                    "_id": None,
+                    "totalCalls": {"$sum": 1},
+                    "avgLatency": {"$avg": "$latency_ms"},
+                }},
+            ]
+            stats = await db.usage_logs.aggregate(stats_pipeline).to_list(1)
+            if stats:
+                proj["totalCalls"] = stats[0].get("totalCalls", 0)
+                proj["avgLatency"] = round(stats[0].get("avgLatency", 0))
+            exposed = await db.exposed_endpoints.count_documents({"project_id": p["_id"], "is_active": True})
+            proj["exposedEndpointCount"] = exposed
+        result.append(proj)
+    return result
 
 @api_router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(get_current_user)):
@@ -912,7 +933,101 @@ async def delete_api_key(key_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.get("/projects/{project_id}/analytics")
 async def get_analytics(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    slug = project.get("slug", "")
+
+    # Total calls
+    total_calls = await db.usage_logs.count_documents({"project_slug": slug})
+
+    # Active keys
+    active_keys = await db.api_keys.count_documents({"project_id": ObjectId(project_id), "is_active": True})
+
+    # Avg latency & error rate
+    avg_latency = 0
+    error_rate = 0.0
+    if total_calls > 0:
+        pipeline_stats = [
+            {"$match": {"project_slug": slug}},
+            {"$group": {
+                "_id": None,
+                "avgLatency": {"$avg": "$latency_ms"},
+                "errorCount": {"$sum": {"$cond": [{"$gte": ["$status_code", 400]}, 1, 0]}},
+            }},
+        ]
+        stats_cursor = db.usage_logs.aggregate(pipeline_stats)
+        stats = await stats_cursor.to_list(1)
+        if stats:
+            avg_latency = round(stats[0].get("avgLatency", 0))
+            error_count = stats[0].get("errorCount", 0)
+            error_rate = round((error_count / total_calls) * 100, 1)
+
+    # Calls by day (last 7 days)
+    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    pipeline_daily = [
+        {"$match": {"project_slug": slug, "timestamp": {"$gte": seven_days_ago}}},
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ]
+    daily_cursor = db.usage_logs.aggregate(pipeline_daily)
+    daily_raw = await daily_cursor.to_list(30)
+    calls_by_day = [{"date": d["_id"], "count": d["count"]} for d in daily_raw]
+
+    # Fill missing days
+    existing_dates = {d["date"] for d in calls_by_day}
+    for i in range(7):
+        day = (datetime.now(timezone.utc) - timedelta(days=6 - i)).strftime("%Y-%m-%d")
+        if day not in existing_dates:
+            calls_by_day.append({"date": day, "count": 0})
+    calls_by_day.sort(key=lambda x: x["date"])
+
+    # Calls by endpoint (top 8)
+    pipeline_ep = [
+        {"$match": {"project_slug": slug}},
+        {"$group": {"_id": "$endpoint", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 8},
+    ]
+    ep_cursor = db.usage_logs.aggregate(pipeline_ep)
+    ep_raw = await ep_cursor.to_list(8)
+    calls_by_endpoint = [{"endpoint": e["_id"], "count": e["count"]} for e in ep_raw]
+
+    # Recent requests (last 20)
+    recent_raw = await db.usage_logs.find(
+        {"project_slug": slug}, {"_id": 0}
+    ).sort("timestamp", -1).limit(20).to_list(20)
+
+    recent_requests = []
+    for r in recent_raw:
+        ts = r.get("timestamp")
+        recent_requests.append({
+            "timestamp": ts.isoformat() if ts else "",
+            "endpoint": r.get("endpoint", ""),
+            "method": r.get("method", ""),
+            "keyName": r.get("key_name", ""),
+            "statusCode": r.get("status_code", 0),
+            "latencyMs": r.get("latency_ms", 0),
+        })
+
+    return {
+        "totalCalls": total_calls,
+        "activeKeys": active_keys,
+        "avgLatency": avg_latency,
+        "errorRate": error_rate,
+        "callsByDay": calls_by_day,
+        "callsByEndpoint": calls_by_endpoint,
+        "recentRequests": recent_requests,
+    }
 
 @api_router.get("/projects/{slug}/spec")
 async def get_spec(slug: str):
