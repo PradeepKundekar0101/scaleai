@@ -337,6 +337,127 @@ class ScalableAPITester:
             self.log_test("Demo fallback scan", False, "Could not create demo project")
             return False
 
+    def test_project_enhanced_get(self):
+        """Test enhanced GET /api/projects/:id with Phase 3 fields"""
+        if not hasattr(self, 'project_id'):
+            self.log_test("Enhanced GET /api/projects/:id", False, "No project ID available")
+            return False
+            
+        success, response = self.make_request('GET', f'projects/{self.project_id}', use_auth=True)
+        
+        if success and isinstance(response, dict):
+            # Check for Phase 3 enhanced fields
+            required_fields = ['routeBreakdown', 'discoveredRouteCount', 'exposedEndpointCount', 'connectionTested']
+            missing_fields = [f for f in required_fields if f not in response]
+            
+            if not missing_fields:
+                breakdown = response.get('routeBreakdown', {})
+                if isinstance(breakdown, dict) and all(k in breakdown for k in ['green', 'yellow', 'red']):
+                    self.log_test("Enhanced GET /api/projects/:id", True, 
+                                f"Enhanced fields present: breakdown={breakdown}, discovered={response['discoveredRouteCount']}, exposed={response['exposedEndpointCount']}, connected={response['connectionTested']}")
+                    return True
+                else:
+                    self.log_test("Enhanced GET /api/projects/:id", False, "Invalid routeBreakdown structure")
+                    return False
+            else:
+                self.log_test("Enhanced GET /api/projects/:id", False, f"Missing Phase 3 fields: {missing_fields}")
+                return False
+        else:
+            self.log_test("Enhanced GET /api/projects/:id", False, str(response))
+            return False
+
+    def test_project_test_connection(self):
+        """Test POST /api/projects/:id/test-connection with mock fallback"""
+        if not hasattr(self, 'project_id'):
+            self.log_test("POST /api/projects/:id/test-connection", False, "No project ID available")
+            return False
+
+        # Test with localhost URL (should trigger mock mode)
+        test_data = {
+            "targetBackendUrl": "http://localhost:3000",
+            "loginEndpoint": "/api/auth/login",
+            "serviceAccountEmail": "test@example.com",
+            "serviceAccountPassword": "testpass123"
+        }
+        
+        success, response = self.make_request('POST', f'projects/{self.project_id}/test-connection', 
+                                            test_data, expected_status=200, use_auth=True)
+        
+        if success and isinstance(response, dict):
+            required_fields = ['success', 'tokenValidFor', 'testResult', 'mock']
+            missing_fields = [f for f in required_fields if f not in response]
+            
+            if not missing_fields:
+                if response.get('success') and response.get('mock'):
+                    self.log_test("POST /api/projects/:id/test-connection", True, 
+                                f"Mock connection successful: {response.get('testResult')}")
+                    return True
+                else:
+                    self.log_test("POST /api/projects/:id/test-connection", False, 
+                                f"Expected mock success, got: success={response.get('success')}, mock={response.get('mock')}")
+                    return False
+            else:
+                self.log_test("POST /api/projects/:id/test-connection", False, f"Missing fields: {missing_fields}")
+                return False
+        else:
+            self.log_test("POST /api/projects/:id/test-connection", False, str(response))
+            return False
+
+    def test_project_endpoints_save(self):
+        """Test POST /api/projects/:id/endpoints - saves selected endpoints"""
+        if not hasattr(self, 'project_id'):
+            self.log_test("POST /api/projects/:id/endpoints", False, "No project ID available")
+            return False
+
+        # First get some routes to work with
+        success, routes = self.make_request('GET', f'projects/{self.project_id}/routes', use_auth=True)
+        if not success or not isinstance(routes, list) or len(routes) == 0:
+            self.log_test("POST /api/projects/:id/endpoints", False, "No routes available for testing")
+            return False
+
+        # Select first green route if available, otherwise first route
+        green_routes = [r for r in routes if r.get('risk') == 'green']
+        test_route = green_routes[0] if green_routes else routes[0]
+        
+        endpoints_data = {
+            "endpoints": [
+                {
+                    "method": test_route.get('method', 'GET'),
+                    "path": test_route.get('path', '/test'),
+                    "description": test_route.get('description', 'Test endpoint'),
+                    "fieldsToStrip": test_route.get('fields_to_strip', []),
+                    "rateLimit": 100
+                }
+            ]
+        }
+        
+        success, response = self.make_request('POST', f'projects/{self.project_id}/endpoints', 
+                                            endpoints_data, expected_status=200, use_auth=True)
+        
+        if success and isinstance(response, dict):
+            if 'count' in response and 'endpoints' in response:
+                count = response.get('count', 0)
+                endpoints = response.get('endpoints', [])
+                
+                if count == 1 and len(endpoints) == 1:
+                    endpoint = endpoints[0]
+                    if endpoint.get('method') == test_route.get('method') and endpoint.get('path') == test_route.get('path'):
+                        self.log_test("POST /api/projects/:id/endpoints", True, 
+                                    f"Endpoint saved successfully: {endpoint.get('method')} {endpoint.get('path')}")
+                        return True
+                    else:
+                        self.log_test("POST /api/projects/:id/endpoints", False, "Endpoint data mismatch")
+                        return False
+                else:
+                    self.log_test("POST /api/projects/:id/endpoints", False, f"Expected 1 endpoint, got {count}")
+                    return False
+            else:
+                self.log_test("POST /api/projects/:id/endpoints", False, "Missing count or endpoints in response")
+                return False
+        else:
+            self.log_test("POST /api/projects/:id/endpoints", False, str(response))
+            return False
+
     def test_github_oauth_stubs(self):
         """Test GitHub OAuth stub endpoints"""
         endpoints = [
@@ -388,7 +509,7 @@ class ScalableAPITester:
 
     def run_all_tests(self):
         """Run all API tests"""
-        print("🚀 Starting Scalable API Tests - Phase 2")
+        print("🚀 Starting Scalable API Tests - Phase 3")
         print(f"Testing against: {self.base_url}")
         print("=" * 50)
         
@@ -410,6 +531,14 @@ class ScalableAPITester:
         self.test_project_scan()
         self.test_project_routes()
         self.test_project_status_transitions()
+        
+        # Test Phase 3 new features
+        print("\n⚡ Testing Phase 3 Endpoint Configuration Features...")
+        self.test_project_enhanced_get()
+        self.test_project_test_connection()
+        self.test_project_endpoints_save()
+        
+        # Test demo fallback
         self.test_demo_fallback()
         
         # Test logout

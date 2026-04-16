@@ -44,7 +44,13 @@ function ProjectCard({ project }) {
     <div
       data-testid={`project-card-${project.id}`}
       className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-5 hover:border-[#3F3F46] transition-colors duration-200 cursor-pointer group"
-      onClick={() => navigate(`/connect?projectId=${project.id}`)}
+      onClick={() => {
+        if (project.status === "configuring" || project.status === "live") {
+          navigate(`/endpoints/${project.id}`);
+        } else {
+          navigate(`/connect?projectId=${project.id}`);
+        }
+      }}
     >
       <div className="flex items-start justify-between mb-3">
         <h3 className="text-[#FAFAFA] font-medium text-base">{project.name}</h3>

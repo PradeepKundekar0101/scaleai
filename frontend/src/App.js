@@ -7,6 +7,7 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ConnectPage from "@/pages/ConnectPage";
+import EndpointsPage from "@/pages/EndpointsPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
-          <Route path="/endpoints/:projectId" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
+          <Route path="/endpoints/:projectId" element={<ProtectedRoute><EndpointsPage /></ProtectedRoute>} />
           <Route path="/keys" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
           <Route path="/docs" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />

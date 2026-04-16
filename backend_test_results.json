@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-04-16T08:51:09.772217",
-  "total_tests": 16,
-  "passed_tests": 16,
+  "timestamp": "2026-04-16T09:13:39.998659",
+  "total_tests": 19,
+  "passed_tests": 19,
   "success_rate": "100.0%",
   "results": [
     {
       "test": "POST /api/auth/register",
       "success": true,
-      "details": "User created with ID: 69e0a2937dd571fbbabaae83",
+      "details": "User created with ID: 69e0a7d2a4e9ab2d5293df19",
       "response_data": null
     },
     {
       "test": "GET /api/auth/me",
       "success": true,
-      "details": "User info retrieved: test_084923@example.com",
+      "details": "User info retrieved: test_091146@example.com",
       "response_data": null
     },
     {
       "test": "POST /api/projects",
       "success": true,
-      "details": "Project created with ID: 69e0a2937dd571fbbabaae84",
+      "details": "Project created with ID: 69e0a7d3a4e9ab2d5293df1a",
       "response_data": null
     },
     {
@@ -31,13 +31,13 @@
     {
       "test": "GET /api/projects/:id",
       "success": true,
-      "details": "Project retrieved: Test Project 084923",
+      "details": "Project retrieved: Test Project 091147",
       "response_data": null
     },
     {
       "test": "POST /api/projects/:id/scan",
       "success": true,
-      "details": "Scan completed: 21 routes found (G:11, Y:3, R:7)",
+      "details": "Scan completed: 21 routes found (G:10, Y:4, R:7)",
       "response_data": null
     },
     {
@@ -50,6 +50,24 @@
       "test": "Project status transitions",
       "success": true,
       "details": "Status changed from 'configuring' to 'configuring'",
+      "response_data": null
+    },
+    {
+      "test": "Enhanced GET /api/projects/:id",
+      "success": true,
+      "details": "Enhanced fields present: breakdown={'green': 10, 'yellow': 4, 'red': 7}, discovered=21, exposed=0, connected=False",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/projects/:id/test-connection",
+      "success": true,
+      "details": "Mock connection successful: GET /api/products \u2192 200 OK (4 products)",
+      "response_data": null
+    },
+    {
+      "test": "POST /api/projects/:id/endpoints",
+      "success": true,
+      "details": "Endpoint saved successfully: POST /api/orders",
       "response_data": null
     },
     {
