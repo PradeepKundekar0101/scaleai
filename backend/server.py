@@ -634,7 +634,6 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
 
 @api_router.post("/projects/{project_id}/deploy")
 async def deploy_project(project_id: str, request: Request, user: dict = Depends(get_current_user)):
-    from ai_agents import call_claude, call_claude_text
     import hashlib
 
     # Verify ownership
@@ -740,19 +739,7 @@ async def deploy_project(project_id: str, request: Request, user: dict = Depends
         "paths": paths,
     }
 
-    # Try AI enhancement (quick, skip on any failure or timeout)
-    try:
-        import asyncio
-        spec_system = f"""You are an API Schema Designer. Enhance this OpenAPI 3.0 specification with realistic example values, detailed request/response schemas, and proper data types. Keep the existing structure but add detail.
-
-Return ONLY the complete enhanced OpenAPI 3.0 JSON object. No markdown, no explanation."""
-        ai_task = asyncio.create_task(call_claude(spec_system, json_module.dumps(openapi_spec, indent=2)))
-        ai_spec = await asyncio.wait_for(ai_task, timeout=15)
-        if ai_spec and isinstance(ai_spec, dict) and "paths" in ai_spec:
-            openapi_spec = ai_spec
-            logger.info("OpenAPI spec enhanced by AI")
-    except Exception as e:
-        logger.info(f"AI spec enhancement skipped: {e}")
+    # NO AI enhancement — pure programmatic for reliability and speed
 
     # Generate TypeScript SDK (programmatic, always reliable)
     methods_code = []
@@ -830,16 +817,97 @@ Return ONLY the complete enhanced OpenAPI 3.0 JSON object. No markdown, no expla
     }
 
 @api_router.post("/projects/{project_id}/keys")
-async def create_api_key(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+async def create_api_key(project_id: str, request: Request, user: dict = Depends(get_current_user)):
+    import hashlib as hl
+    body = await request.json()
+
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    key_name = body.get("name", "API Key")
+    raw_key = f"sk_live_{secrets.token_hex(24)}"
+    key_hash = hl.sha256(raw_key.encode("utf-8")).hexdigest()
+    key_prefix = raw_key[:16]
+
+    # Get all exposed endpoint paths
+    eps = await db.exposed_endpoints.find(
+        {"project_id": ObjectId(project_id), "is_active": True}
+    ).to_list(500)
+    all_paths = [e.get("path", "") for e in eps]
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.api_keys.insert_one({
+        "key_hash": key_hash,
+        "key_prefix": key_prefix,
+        "project_id": ObjectId(project_id),
+        "name": key_name,
+        "allowed_endpoints": all_paths,
+        "rate_limit": body.get("rateLimit", 100),
+        "is_active": True,
+        "created_at": now,
+    })
+
+    return {
+        "apiKey": raw_key,
+        "keyPrefix": key_prefix,
+        "name": key_name,
+        "rateLimit": body.get("rateLimit", 100),
+        "isActive": True,
+        "createdAt": now,
+    }
 
 @api_router.get("/projects/{project_id}/keys")
 async def list_api_keys(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    keys = await db.api_keys.find(
+        {"project_id": ObjectId(project_id)},
+    ).to_list(100)
+
+    return [
+        {
+            "id": str(k["_id"]),
+            "keyPrefix": k.get("key_prefix", ""),
+            "name": k.get("name", ""),
+            "isActive": k.get("is_active", True),
+            "rateLimit": k.get("rate_limit", 100),
+            "createdAt": k.get("created_at", ""),
+        }
+        for k in keys
+    ]
 
 @api_router.delete("/keys/{key_id}")
 async def delete_api_key(key_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    try:
+        key_doc = await db.api_keys.find_one({"_id": ObjectId(key_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid key ID")
+    if not key_doc:
+        raise HTTPException(status_code=404, detail="Key not found")
+
+    # Verify ownership via project
+    project = await db.projects.find_one({"_id": key_doc.get("project_id")})
+    if not project or str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    await db.api_keys.update_one(
+        {"_id": ObjectId(key_id)},
+        {"$set": {"is_active": False}}
+    )
+    return {"message": "Key revoked"}
 
 @api_router.get("/projects/{project_id}/analytics")
 async def get_analytics(project_id: str, user: dict = Depends(get_current_user)):
