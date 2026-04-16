@@ -453,16 +453,36 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.get("/projects/{project_id}/scan/stream")
 async def scan_project_stream(
-    project_id: str, 
-    token: str = None,
-    user: dict = Depends(get_current_user)
+    project_id: str,
+    request: Request,
 ):
-    """Streaming scan endpoint with ReAct pattern updates"""
+    """Streaming scan endpoint with ReAct pattern updates - no auth dependency for EventSource"""
     from fastapi.responses import StreamingResponse
     from github_service import fetch_github_files
     from ai_agents import analyze_code, audit_security, merge_analysis_and_audit
     import asyncio
     import json
+
+    # Manual authentication for EventSource (can't use Depends due to headers)
+    auth_header = request.headers.get("Authorization", "")
+    token_from_query = request.query_params.get("token", "")
+    
+    token = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+    elif token_from_query:
+        token = token_from_query
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify token
+    try:
+        user = verify_token(token)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     # Verify ownership
     try:

@@ -151,19 +151,16 @@ export default function ConnectPage() {
       });
 
       // Use EventSource for streaming
-      const token = localStorage.getItem("token");
-      const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
-      const streamUrl = `${baseUrl}/api/projects/${currentProjectId}/scan/stream`;
+      const token = localStorage.getItem("scalable_token");
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
       
-      // Create EventSource with auth
+      const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
+      const streamUrl = `${baseUrl}/api/projects/${currentProjectId}/scan/stream?token=${encodeURIComponent(token)}`;
+      
       const eventSource = new EventSource(streamUrl);
       eventSourceRef.current = eventSource;
-
-      // Set auth header via cookie or custom header workaround
-      // Note: EventSource doesn't support custom headers, so we'll pass token in URL for now
-      const authenticatedUrl = `${streamUrl}?token=${encodeURIComponent(token)}`;
-      const authenticatedEventSource = new EventSource(authenticatedUrl);
-      eventSourceRef.current = authenticatedEventSource;
 
       const agentMap = {
         "Code Analyst": "codeAnalyst",
@@ -171,7 +168,7 @@ export default function ConnectPage() {
         "Risk Assessment": "riskAssessment",
       };
 
-      authenticatedEventSource.addEventListener("step", (event) => {
+      eventSource.addEventListener("step", (event) => {
         const data = JSON.parse(event.data);
         const stepKey = agentMap[data.agent];
         
@@ -195,7 +192,7 @@ export default function ConnectPage() {
         }
       });
 
-      authenticatedEventSource.addEventListener("complete", (event) => {
+      eventSource.addEventListener("complete", (event) => {
         const data = JSON.parse(event.data);
         
         // Mark all as complete
@@ -208,16 +205,16 @@ export default function ConnectPage() {
         setScanResult(data);
         
         // Close EventSource
-        authenticatedEventSource.close();
+        eventSource.close();
         eventSourceRef.current = null;
         
         // Transition to complete
         setTimeout(() => setState("complete"), 800);
       });
 
-      authenticatedEventSource.addEventListener("error", (event) => {
+      eventSource.addEventListener("error", (event) => {
         console.error("EventSource error:", event);
-        authenticatedEventSource.close();
+        eventSource.close();
         eventSourceRef.current = null;
         
         // Fallback to non-streaming endpoint
