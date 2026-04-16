@@ -35,16 +35,22 @@ Scalable is an AI-powered platform that helps SaaS companies convert into PaaS b
 - Protected routes with auth context
 - GitHub OAuth button (UI only, shows "coming soon" toast)
 
-## What's Been Implemented (Phase 2 — April 16, 2026)
-- GitHub file fetcher service with demo fallback (hardcoded QuickBite source code)
-- Claude AI Code Analyst Agent (discovers API routes from source code)
-- Claude AI Security Auditor Agent (rates routes green/yellow/red for public exposure)
-- Two-level fallback: GitHub API fallback + AI fallback (hardcoded scan results)
-- POST /api/projects/:id/scan - full scan pipeline (fetch → analyze → audit → merge → store)
-- GET /api/projects/:id/routes - returns discovered routes sorted by risk
-- Connect page with 3-state flow: input → scanning animation → results
-- 3-step animated progress (Code Analyst → Security Auditor → Risk Assessment)
-- Scan complete view with green/yellow/red breakdown and "Configure Endpoints" CTA
+## What's Been Implemented (Phase 3 — April 16, 2026)
+- POST /api/projects/:id/endpoints — saves selected endpoints to exposed_endpoints collection
+- POST /api/projects/:id/test-connection — tests backend connection with mock fallback for unreachable servers
+- Enhanced GET /api/projects/:id — includes routeBreakdown, discoveredRouteCount, exposedEndpointCount, connectionTested
+- Endpoints configuration page (/endpoints/:projectId) — polished table with:
+  - Green rows: selectable with green left border
+  - Yellow rows: expandable showing fields to strip with strikethrough
+  - Red rows: disabled with lock icon, reduced opacity
+  - Method badges (GET=green, POST=blue, PUT=yellow, DELETE=red, PATCH=purple)
+  - Editable rate limit inputs per endpoint
+  - Risk dot tooltips showing riskReason
+- "Select All Safe" button auto-selects all green routes
+- Auth configuration section: backend URL, login endpoint (pre-filled), service account credentials
+- Test Connection with success/failure UI and mock mode indicator
+- Deploy button with smart enabled/disabled state (requires endpoints + connection)
+- Dashboard project cards navigate to /endpoints for "configuring" status projects
 
 ## Prioritized Backlog
 ### P0 (Phase 3)
