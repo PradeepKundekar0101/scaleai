@@ -203,7 +203,7 @@ frontend:
     status_history:
         - working: true
         - agent: "main"
-        - comment: "Agent streaming logs now persist in a collapsible dark card above the scan results. Shows step count and all agent messages. Collapsible via chevron toggle."
+        - comment: "Agent streaming logs now persist in a collapsible card above scan results. Uses theme-aware CSS variables (no hardcoded dark colors). Emojis replaced with clean colored dot indicators. Collapsed by default, shows step count."
 
   - task: "Donut chart for route risk distribution"
     implemented: true

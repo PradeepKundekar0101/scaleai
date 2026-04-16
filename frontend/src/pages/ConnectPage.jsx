@@ -5,7 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, CheckCircle2, Loader2, Circle, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, CheckCircle2, Loader2, Circle, ArrowRight, ChevronDown, ChevronUp, Eye, Zap, Shield, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
@@ -28,41 +28,39 @@ function TypewriterText({ text, speed = 20 }) {
 
 function ReActMessage({ type, message, isLatest }) {
   return (
-    <div className="flex items-start gap-2 py-1.5">
-      <span className="text-[#71717A] text-sm shrink-0 select-none">
-        {type === 'reason' ? '💭' : '⚡'}
+    <div className="flex items-start gap-2.5 py-1">
+      <span className="mt-1.5 shrink-0">
+        {type === 'reason' ? (
+          <span className="block w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] opacity-50" />
+        ) : (
+          <span className="block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        )}
       </span>
-      <p className="text-sm text-[#A1A1AA] leading-relaxed">
+      <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
         {isLatest ? <TypewriterText text={message} speed={15} /> : message}
       </p>
     </div>
   );
 }
 
-function StepIndicator({ agent, status, messages }) {
+function StepIndicator({ agent, status, messages, icon: Icon }) {
   const getIcon = () => {
-    if (status === "complete") return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
-    if (status === "working") return <Loader2 className="w-5 h-5 text-[#2563EB] animate-spin" />;
-    return <Circle className="w-5 h-5 text-[#3F3F46]" />;
-  };
-
-  const getStatusColor = () => {
-    if (status === "complete") return "text-[#FAFAFA]";
-    if (status === "working") return "text-[#FAFAFA]";
-    return "text-[#52525B]";
+    if (status === "complete") return <CheckCircle2 className="w-[18px] h-[18px] text-emerald-500" />;
+    if (status === "working") return <Loader2 className="w-[18px] h-[18px] text-[var(--accent-primary)] animate-spin" />;
+    return <Circle className="w-[18px] h-[18px] text-[var(--text-tertiary)]" />;
   };
 
   return (
-    <div className="py-3">
-      <div className="flex items-center gap-3 mb-2">
+    <div className="py-2.5">
+      <div className="flex items-center gap-2.5 mb-1.5">
         {getIcon()}
-        <h3 className={`font-medium ${getStatusColor()}`}>
+        <h3 className={`text-sm font-medium ${status === "pending" ? "text-[var(--text-tertiary)]" : "text-[var(--text-primary)]"}`}>
           {agent}
         </h3>
       </div>
       
       {messages.length > 0 && (
-        <div className="ml-8 space-y-0.5">
+        <div className="ml-7 space-y-0.5">
           {messages.map((msg, i) => (
             <ReActMessage 
               key={i} 
@@ -88,7 +86,7 @@ export default function ConnectPage() {
   const [state, setState] = useState("input"); // input | scanning | complete
   const [scanResult, setScanResult] = useState(null);
   const [repoName, setRepoName] = useState("");
-  const [showAgentLogs, setShowAgentLogs] = useState(true);
+  const [showAgentLogs, setShowAgentLogs] = useState(false);
 
   // Step statuses and streaming messages
   const [steps, setSteps] = useState({
@@ -244,6 +242,8 @@ export default function ConnectPage() {
     }
   }, [projectId, projectName, repoUrl, repoName]);
 
+  const totalStepCount = steps.codeAnalyst.messages.length + steps.securityAuditor.messages.length + steps.riskAssessment.messages.length;
+
   return (
     <AppLayout>
       <div className="max-w-2xl mx-auto" data-testid="connect-page">
@@ -301,31 +301,34 @@ export default function ConnectPage() {
         {/* State 2: Scanning with ReAct Streaming */}
         {state === "scanning" && (
           <div
-            className="bg-[#0F0F12] border border-[#27272A] rounded-2xl p-6 shadow-sm"
+            className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm"
             data-testid="connect-scanning-state"
           >
-            <div className="mb-6">
-              <h2 className="text-[#FAFAFA] font-semibold text-lg mb-1">
-                Scanning <span className="font-mono text-purple-500">{repoName}</span>...
+            <div className="mb-5">
+              <h2 className="text-[var(--text-primary)] font-semibold text-lg mb-1">
+                Scanning <span className="font-mono text-[var(--accent-primary)]">{repoName}</span>...
               </h2>
-              <p className="text-[#71717A] text-sm">AI agents analyzing your codebase in real-time</p>
+              <p className="text-[var(--text-tertiary)] text-sm">AI agents analyzing your codebase in real-time</p>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-0.5 divide-y divide-[var(--border-secondary)]">
               <StepIndicator
                 agent="Code Analyst Agent"
                 status={steps.codeAnalyst.status}
                 messages={steps.codeAnalyst.messages}
+                icon={Eye}
               />
               <StepIndicator
                 agent="Security Auditor Agent"
                 status={steps.securityAuditor.status}
                 messages={steps.securityAuditor.messages}
+                icon={Shield}
               />
               <StepIndicator
                 agent="Risk Assessment"
                 status={steps.riskAssessment.status}
                 messages={steps.riskAssessment.messages}
+                icon={BarChart3}
               />
             </div>
           </div>
@@ -333,47 +336,50 @@ export default function ConnectPage() {
 
         {/* State 3: Complete */}
         {state === "complete" && scanResult && (
-          <div className="space-y-4" data-testid="connect-complete-state">
+          <div className="space-y-3" data-testid="connect-complete-state">
             {/* Persisted Agent Steps (collapsible) */}
-            {(steps.codeAnalyst.messages.length > 0 || steps.securityAuditor.messages.length > 0 || steps.riskAssessment.messages.length > 0) && (
-              <div className="bg-[#0F0F12] border border-[#27272A] rounded-2xl overflow-hidden shadow-sm">
+            {totalStepCount > 0 && (
+              <div className="bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-2xl overflow-hidden">
                 <button
                   onClick={() => setShowAgentLogs(!showAgentLogs)}
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#18181B] transition-colors"
+                  className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[var(--bg-tertiary)]/50 transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                    <span className="text-[#FAFAFA] font-medium text-sm">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    <span className="text-[var(--text-primary)] font-medium text-sm">
                       AI Agent Analysis Log
                     </span>
-                    <span className="text-[#52525B] text-xs">
-                      {steps.codeAnalyst.messages.length + steps.securityAuditor.messages.length + steps.riskAssessment.messages.length} steps completed
+                    <span className="text-[var(--text-tertiary)] text-xs font-normal">
+                      {totalStepCount} steps completed
                     </span>
                   </div>
                   {showAgentLogs ? (
-                    <ChevronUp className="w-4 h-4 text-[#71717A]" />
+                    <ChevronUp className="w-4 h-4 text-[var(--text-tertiary)]" />
                   ) : (
-                    <ChevronDown className="w-4 h-4 text-[#71717A]" />
+                    <ChevronDown className="w-4 h-4 text-[var(--text-tertiary)]" />
                   )}
                 </button>
                 
                 {showAgentLogs && (
-                  <div className="px-6 pb-5 border-t border-[#27272A]">
-                    <div className="space-y-1 pt-3">
+                  <div className="px-5 pb-4 border-t border-[var(--border-primary)]">
+                    <div className="divide-y divide-[var(--border-secondary)]">
                       <StepIndicator
                         agent="Code Analyst Agent"
                         status="complete"
                         messages={steps.codeAnalyst.messages}
+                        icon={Eye}
                       />
                       <StepIndicator
                         agent="Security Auditor Agent"
                         status="complete"
                         messages={steps.securityAuditor.messages}
+                        icon={Shield}
                       />
                       <StepIndicator
                         agent="Risk Assessment"
                         status="complete"
                         messages={steps.riskAssessment.messages}
+                        icon={BarChart3}
                       />
                     </div>
                   </div>
@@ -384,7 +390,7 @@ export default function ConnectPage() {
             {/* Scan Results Card with Donut Chart */}
             <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                 <h2 className="text-[var(--text-primary)] font-semibold text-lg">Scan Complete</h2>
               </div>
 
