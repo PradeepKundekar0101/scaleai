@@ -215,6 +215,7 @@ export default function EndpointsPage() {
     generateSpec: "pending",
     generateSdk: "pending",
     createKey: "pending",
+    publishNpm: "pending",
     activateGateway: "pending",
   });
   const [copied, setCopied] = useState({});
@@ -333,6 +334,7 @@ export default function EndpointsPage() {
       generateSpec: "pending",
       generateSdk: "pending",
       createKey: "pending",
+      publishNpm: "pending",
       activateGateway: "pending",
     });
 
@@ -344,19 +346,24 @@ export default function EndpointsPage() {
       await new Promise(r => setTimeout(r, 800));
 
       setDeploySteps(s => ({ ...s, verifyConnection: "complete", generateSpec: "working" }));
-      await new Promise(r => setTimeout(r, 1200));
 
-      setDeploySteps(s => ({ ...s, generateSpec: "complete", generateSdk: "working" }));
-
-      // Make the actual deploy call (runs while animation plays)
+      // Make the actual deploy call (AI generation + npm publish happens server-side)
       const deployPromise = api.post(`/projects/${projectId}/deploy`);
 
-      await new Promise(r => setTimeout(r, 1500));
+      // Animate steps while waiting for the deploy call
+      await new Promise(r => setTimeout(r, 3000));
+      setDeploySteps(s => ({ ...s, generateSpec: "complete", generateSdk: "working" }));
+
+      await new Promise(r => setTimeout(r, 3000));
       setDeploySteps(s => ({ ...s, generateSdk: "complete", createKey: "working" }));
 
+      await new Promise(r => setTimeout(r, 1500));
+      setDeploySteps(s => ({ ...s, createKey: "complete", publishNpm: "working" }));
+
+      // Wait for the actual deploy response
       const { data } = await deployPromise;
 
-      setDeploySteps(s => ({ ...s, createKey: "complete", activateGateway: "working" }));
+      setDeploySteps(s => ({ ...s, publishNpm: "complete", activateGateway: "working" }));
       await new Promise(r => setTimeout(r, 600));
 
       setDeploySteps({
@@ -365,6 +372,7 @@ export default function EndpointsPage() {
         generateSpec: "complete",
         generateSdk: "complete",
         createKey: "complete",
+        publishNpm: "complete",
         activateGateway: "complete",
       });
 
@@ -415,9 +423,10 @@ export default function EndpointsPage() {
     const stepList = [
       { key: "saveEndpoints", label: "Saving endpoint configuration" },
       { key: "verifyConnection", label: "Verifying backend connection" },
-      { key: "generateSpec", label: "Generating OpenAPI specification" },
-      { key: "generateSdk", label: "Generating TypeScript SDK" },
+      { key: "generateSpec", label: "AI generating OpenAPI specification" },
+      { key: "generateSdk", label: "AI generating TypeScript SDK" },
       { key: "createKey", label: "Creating API key" },
+      { key: "publishNpm", label: "Publishing SDK to npm" },
       { key: "activateGateway", label: "Activating gateway" },
     ];
     return (
@@ -497,6 +506,15 @@ export default function EndpointsPage() {
                     {copied.sdk ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
+                {deployResult.npmPublished ? (
+                  <p className="text-xs text-emerald-400/80 mt-2 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3" /> Published to npm as <span className="font-mono">{deployResult.npmPackage}@{deployResult.npmVersion}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
+                    <Info className="w-3 h-3" /> SDK generated but npm publish pending
+                  </p>
+                )}
               </div>
 
               {/* API Key */}

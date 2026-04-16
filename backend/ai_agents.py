@@ -231,6 +231,102 @@ async def audit_security(code_analysis: dict) -> dict:
         return DEMO_SECURITY_AUDIT
 
 
+OPENAPI_SCHEMA_DESIGNER_PROMPT = """You are an API Schema Designer. Generate a complete OpenAPI 3.0 specification in JSON format from the provided endpoint list.
+
+Requirements:
+- Authentication: API Key via X-API-Key header (securitySchemes)
+- Include realistic example values in all request/response schemas
+- Sensitive fields that are marked for stripping must NOT appear in response schemas
+- Include standard error responses on every endpoint: 401 (missing key), 403 (invalid key), 404 (not found), 429 (rate limited)
+- Group endpoints by resource using tags (e.g., Orders, Products, Restaurants)
+- Include rate limit response headers in descriptions: X-RateLimit-Limit, X-RateLimit-Remaining
+- info section: title = "{projectName} API", version = "1.0.0", description includes "Powered by Scalable"
+- servers: [{{ url: "{gatewayBaseUrl}" }}]
+- For each endpoint, generate realistic response schemas based on the endpoint description and path
+- For POST/PUT/PATCH endpoints, include requestBody schemas
+- Use proper $ref references for reusable schemas in components/schemas
+
+Return ONLY the complete OpenAPI 3.0 JSON object. No markdown, no explanation, no code blocks."""
+
+SDK_GENERATOR_PROMPT = """You are a TypeScript SDK generator. Generate a complete, single-file typed SDK from the provided API endpoints.
+
+Requirements:
+- Use axios for HTTP requests (import axios and AxiosInstance from 'axios')
+- Export a main class: ScalableClient
+- Constructor accepts: {{ apiKey: string; baseUrl?: string }}
+- Create typed interfaces for ALL request and response schemas based on the endpoint descriptions
+- Resource-based method organization using getter properties:
+  - client.orders.list() → Promise<Order[]>
+  - client.orders.get(id: string) → Promise<Order>
+  - client.orders.create(params: CreateOrderParams) → Promise<Order>
+  - client.products.list() → Promise<Product[]>
+  - etc.
+- Comprehensive JSDoc comments on every method
+- Export a ScalableError class with statusCode, errorCode, and message
+- Automatically set X-API-Key header on every request
+- Default baseUrl: "{gatewayBaseUrl}"
+- Handle path parameters by replacing :param with actual values
+- Include proper error handling in the HTTP client
+
+Return ONLY TypeScript code. No markdown, no code blocks, no explanation. Just raw .ts file contents starting with import statements."""
+
+
+async def generate_openapi_spec_ai(project_name: str, gateway_url: str, endpoints: list) -> dict:
+    """Generate OpenAPI 3.0 spec using Claude AI. Falls back to None on failure."""
+    prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{projectName}", project_name).replace("{gatewayBaseUrl}", gateway_url)
+
+    ep_description = json.dumps(endpoints, indent=2)
+    user_msg = f"""Generate a complete OpenAPI 3.0 specification for the "{project_name}" API.
+
+Gateway Base URL: {gateway_url}
+
+Endpoints to document:
+{ep_description}
+
+Remember: Fields listed in fieldsToStrip are REMOVED from responses automatically — do NOT include them in response schemas."""
+
+    try:
+        result = await call_claude(prompt, user_msg)
+        # Validate it's a proper OpenAPI spec
+        if "openapi" in result and "paths" in result:
+            logger.info(f"AI generated OpenAPI spec with {len(result.get('paths', {}))} paths")
+            return result
+        else:
+            logger.warning("AI OpenAPI spec missing required fields")
+            return None
+    except Exception as e:
+        logger.error(f"AI OpenAPI generation failed: {e}")
+        return None
+
+
+async def generate_sdk_ai(project_name: str, gateway_url: str, endpoints: list) -> str:
+    """Generate TypeScript SDK using Claude AI. Falls back to None on failure."""
+    prompt = SDK_GENERATOR_PROMPT.replace("{gatewayBaseUrl}", gateway_url)
+
+    ep_description = json.dumps(endpoints, indent=2)
+    user_msg = f"""Generate a complete TypeScript SDK for the "{project_name}" API.
+
+Gateway Base URL: {gateway_url}
+Package will be published as: @scalable/{project_name.lower().replace(' ', '-')}
+
+Endpoints:
+{ep_description}
+
+Create typed interfaces for all request/response objects based on the endpoint descriptions. The SDK should be production-ready with full type safety."""
+
+    try:
+        result = await call_claude_text(prompt, user_msg)
+        if result and len(result) > 100 and ("class" in result or "export" in result):
+            logger.info(f"AI generated SDK ({len(result)} chars)")
+            return result
+        else:
+            logger.warning("AI SDK response too short or invalid")
+            return None
+    except Exception as e:
+        logger.error(f"AI SDK generation failed: {e}")
+        return None
+
+
 def merge_analysis_and_audit(code_analysis: dict, security_audit: dict) -> list:
     """Merge code analysis routes with security audit results."""
     # Build lookup by method+path
