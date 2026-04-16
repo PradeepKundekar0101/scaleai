@@ -873,7 +873,7 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     else:
         first_origin = ""
 
-    # Primary: subdomain URL (e.g., quickbite.gateway.usescale.ai)
+    # Primary: subdomain URL (e.g., quickbite.usescalableai.com)
     if gateway_domain:
         gateway_base_url = f"https://{slug}.{gateway_domain}"
     else:
@@ -1551,14 +1551,17 @@ async def gateway_route(project_slug: str, path: str, request: Request):
 
 
 # ── Subdomain-based gateway middleware ─────────────────────
-# When deployed with wildcard DNS (*.gateway.usescale.ai),
-# requests to quickbite.gateway.usescale.ai/* are routed here.
+# With wildcard DNS (*. usescalableai.com), requests to
+# {slug}.usescalableai.com/* are routed through the gateway.
+
+RESERVED_SUBDOMAINS = {"api", "www", "app", "admin", "mail", "smtp", "ftp", "dashboard"}
 
 @app.middleware("http")
 async def subdomain_gateway_middleware(request: Request, call_next):
     """
     Detect subdomain gateway requests.
-    If Host = {slug}.gateway.usescale.ai, rewrite to /api/gateway/{slug}/{path}
+    If Host = {slug}.usescalableai.com (and slug is not reserved),
+    route through the gateway handler.
     """
     gateway_domain = os.environ.get("GATEWAY_DOMAIN", "")
     if not gateway_domain:
@@ -1569,6 +1572,10 @@ async def subdomain_gateway_middleware(request: Request, call_next):
     # Check if this is a subdomain of the gateway domain
     if host.endswith(f".{gateway_domain}") and host != gateway_domain:
         slug = host.replace(f".{gateway_domain}", "").split(".")[0]
+
+        if slug in RESERVED_SUBDOMAINS:
+            return await call_next(request)
+
         path = request.url.path.lstrip("/")
 
         # Handle CORS preflight for subdomain requests
