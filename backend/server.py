@@ -6,6 +6,7 @@ import os
 os.environ.setdefault("OPENAI_TIMEOUT", "30")
 os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -152,7 +153,15 @@ class ProjectCreateInput(BaseModel):
 
 # ── App setup ────────────────────────────────────────────
 
-app = FastAPI(title="Scalable API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    # Fire DB setup in background — do NOT await it here so the server binds immediately
+    task = asyncio.create_task(_setup_db_safe())
+    yield
+    task.cancel()
+    client.close()
+
+app = FastAPI(title="Scalable API", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 
 @app.get("/health")
 async def health_check():
@@ -1577,54 +1586,44 @@ async def subdomain_gateway_middleware(request: Request, call_next):
 
     return await call_next(request)
 
-# ── Startup ──────────────────────────────────────────────
+# ── Background DB setup (non-blocking) ───────────────────
 
-@app.on_event("startup")
-async def startup():
+async def _setup_db_safe():
     try:
-        logger.info("Creating database indexes...")
-        await asyncio.wait_for(_setup_db(), timeout=15)
-        logger.info("Startup complete")
+        logger.info("Creating database indexes (background)...")
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index([("github_id", 1)], unique=True, sparse=True)
+        await db.projects.create_index("slug", unique=True)
+        await db.projects.create_index("user_id")
+        await db.api_keys.create_index([("key_hash", 1), ("project_id", 1), ("is_active", 1)])
+        await db.exposed_endpoints.create_index([("project_id", 1), ("path", 1), ("method", 1), ("is_active", 1)])
+        await db.rate_limits.create_index("created_at", expireAfterSeconds=120)
+        await db.usage_logs.create_index([("project_slug", 1), ("timestamp", -1)])
+        await db.login_attempts.create_index("identifier")
+
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@scalable.dev")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "Admin123!")
+        existing = await db.users.find_one({"email": admin_email})
+        if existing is None:
+            await db.users.insert_one({
+                "email": admin_email,
+                "password_hash": hash_password(admin_password),
+                "name": "Admin",
+                "avatar_url": "",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            logger.info(f"Admin user seeded: {admin_email}")
+        elif not verify_password(admin_password, existing["password_hash"]):
+            await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+            logger.info("Admin password updated")
+        logger.info("DB setup complete")
+    except asyncio.CancelledError:
+        pass
     except Exception as e:
-        logger.warning(f"Startup DB setup failed (app will still serve): {e}")
+        logger.warning(f"DB setup failed (app still serves): {e}")
 
 
-async def _setup_db():
-    # Users
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index([("github_id", 1)], unique=True, sparse=True)
-    # Projects
-    await db.projects.create_index("slug", unique=True)
-    await db.projects.create_index("user_id")
-    # API keys
-    await db.api_keys.create_index([("key_hash", 1), ("project_id", 1), ("is_active", 1)])
-    # Exposed endpoints
-    await db.exposed_endpoints.create_index([("project_id", 1), ("path", 1), ("method", 1), ("is_active", 1)])
-    # Rate limits
-    await db.rate_limits.create_index("created_at", expireAfterSeconds=120)
-    # Usage logs
-    await db.usage_logs.create_index([("project_slug", 1), ("timestamp", -1)])
-    # Login attempts
-    await db.login_attempts.create_index("identifier")
-
-    # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@scalable.dev")
-    admin_password = os.environ.get("ADMIN_PASSWORD", "Admin123!")
-    existing = await db.users.find_one({"email": admin_email})
-    if existing is None:
-        await db.users.insert_one({
-            "email": admin_email,
-            "password_hash": hash_password(admin_password),
-            "name": "Admin",
-            "avatar_url": "",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
-        logger.info(f"Admin user seeded: {admin_email}")
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
-        logger.info("Admin password updated")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server:app", host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
