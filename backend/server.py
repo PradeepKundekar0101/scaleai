@@ -10,6 +10,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depend
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 import logging
 import re
 import secrets
@@ -147,6 +148,10 @@ class ProjectCreateInput(BaseModel):
 # ── App setup ────────────────────────────────────────────
 
 app = FastAPI(title="Scalable API", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 # CORS - must be before routes
 app.add_middleware(
@@ -1571,7 +1576,15 @@ async def subdomain_gateway_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup():
-    logger.info("Creating database indexes...")
+    try:
+        logger.info("Creating database indexes...")
+        await asyncio.wait_for(_setup_db(), timeout=15)
+        logger.info("Startup complete")
+    except Exception as e:
+        logger.warning(f"Startup DB setup failed (app will still serve): {e}")
+
+
+async def _setup_db():
     # Users
     await db.users.create_index("email", unique=True)
     await db.users.create_index([("github_id", 1)], unique=True, sparse=True)
@@ -1606,17 +1619,6 @@ async def startup():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
         logger.info("Admin password updated")
-
-    # Write test credentials
-    memory_dir = os.path.join(os.path.dirname(__file__), "memory")
-    os.makedirs(memory_dir, exist_ok=True)
-    with open(os.path.join(memory_dir, "test_credentials.md"), "w") as f:
-        f.write("# Test Credentials\n\n")
-        f.write(f"## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n\n")
-        f.write("## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n- POST /api/auth/logout\n- POST /api/auth/refresh\n\n")
-        f.write("## Project Endpoints\n- POST /api/projects\n- GET /api/projects\n- GET /api/projects/:id\n")
-
-    logger.info("Startup complete")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
