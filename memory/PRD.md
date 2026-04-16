@@ -35,13 +35,24 @@ Scalable is an AI-powered platform that helps SaaS companies convert into PaaS b
 - Protected routes with auth context
 - GitHub OAuth button (UI only, shows "coming soon" toast)
 
-## Prioritized Backlog
-### P0 (Phase 2)
-- Repository scanning / route discovery engine
-- Endpoint configuration and exposure
-- API key generation and management
+## What's Been Implemented (Phase 2 — April 16, 2026)
+- GitHub file fetcher service with demo fallback (hardcoded QuickBite source code)
+- Claude AI Code Analyst Agent (discovers API routes from source code)
+- Claude AI Security Auditor Agent (rates routes green/yellow/red for public exposure)
+- Two-level fallback: GitHub API fallback + AI fallback (hardcoded scan results)
+- POST /api/projects/:id/scan - full scan pipeline (fetch → analyze → audit → merge → store)
+- GET /api/projects/:id/routes - returns discovered routes sorted by risk
+- Connect page with 3-state flow: input → scanning animation → results
+- 3-step animated progress (Code Analyst → Security Auditor → Risk Assessment)
+- Scan complete view with green/yellow/red breakdown and "Configure Endpoints" CTA
 
-### P1 (Phase 3)
+## Prioritized Backlog
+### P0 (Phase 3)
+- Endpoint configuration page (/endpoints/:projectId) - toggle routes on/off, configure field stripping
+- API key generation and management
+- Deploy/publish gateway
+
+### P1 (Phase 4)
 - Analytics dashboard with usage charts
 - Rate limiting enforcement on gateway
 - OpenAPI spec generation
