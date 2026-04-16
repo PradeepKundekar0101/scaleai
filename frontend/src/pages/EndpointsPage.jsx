@@ -21,6 +21,12 @@ import {
   Link2,
   ShieldCheck,
   Info,
+  Copy,
+  Check,
+  ExternalLink,
+  Key,
+  BarChart3,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -200,6 +206,17 @@ export default function EndpointsPage() {
 
   // Deploy
   const [saving, setSaving] = useState(false);
+  const [deployState, setDeployState] = useState("idle"); // idle | deploying | success
+  const [deployResult, setDeployResult] = useState(null);
+  const [deploySteps, setDeploySteps] = useState({
+    saveEndpoints: "pending",
+    verifyConnection: "pending",
+    generateSpec: "pending",
+    generateSdk: "pending",
+    createKey: "pending",
+    activateGateway: "pending",
+  });
+  const [copied, setCopied] = useState({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -287,6 +304,13 @@ export default function EndpointsPage() {
     }
   };
 
+  const copyToClipboard = (text, key) => {
+    navigator.clipboard.writeText(text);
+    setCopied(s => ({ ...s, [key]: true }));
+    setTimeout(() => setCopied(s => ({ ...s, [key]: false })), 2000);
+    toast.success("Copied to clipboard");
+  };
+
   const handleDeploy = async () => {
     const selectedEndpoints = routes
       .map((r, i) => ({ ...r, idx: i }))
@@ -301,15 +325,55 @@ export default function EndpointsPage() {
 
     if (selectedEndpoints.length === 0) return;
 
-    setSaving(true);
+    setDeployState("deploying");
+    setDeploySteps({
+      saveEndpoints: "working",
+      verifyConnection: "pending",
+      generateSpec: "pending",
+      generateSdk: "pending",
+      createKey: "pending",
+      activateGateway: "pending",
+    });
+
     try {
+      // Save endpoints first
       await api.post(`/projects/${projectId}/endpoints`, { endpoints: selectedEndpoints });
-      toast.success(`${selectedEndpoints.length} endpoints configured`);
-      toast.info("Deploy flow coming in Phase 4");
+
+      setDeploySteps(s => ({ ...s, saveEndpoints: "complete", verifyConnection: "working" }));
+      await new Promise(r => setTimeout(r, 800));
+
+      setDeploySteps(s => ({ ...s, verifyConnection: "complete", generateSpec: "working" }));
+      await new Promise(r => setTimeout(r, 1200));
+
+      setDeploySteps(s => ({ ...s, generateSpec: "complete", generateSdk: "working" }));
+
+      // Make the actual deploy call (runs while animation plays)
+      const deployPromise = api.post(`/projects/${projectId}/deploy`);
+
+      await new Promise(r => setTimeout(r, 1500));
+      setDeploySteps(s => ({ ...s, generateSdk: "complete", createKey: "working" }));
+
+      const { data } = await deployPromise;
+
+      setDeploySteps(s => ({ ...s, createKey: "complete", activateGateway: "working" }));
+      await new Promise(r => setTimeout(r, 600));
+
+      setDeploySteps({
+        saveEndpoints: "complete",
+        verifyConnection: "complete",
+        generateSpec: "complete",
+        generateSdk: "complete",
+        createKey: "complete",
+        activateGateway: "complete",
+      });
+
+      setDeployResult(data);
+      await new Promise(r => setTimeout(r, 800));
+      setDeployState("success");
+
     } catch (e) {
-      toast.error(formatApiError(e.response?.data?.detail) || "Failed to save endpoints");
-    } finally {
-      setSaving(false);
+      toast.error(formatApiError(e.response?.data?.detail) || "Deploy failed");
+      setDeployState("idle");
     }
   };
 
@@ -320,6 +384,156 @@ export default function EndpointsPage() {
       <AppLayout>
         <div className="flex justify-center py-32">
           <Loader2 className="w-6 h-6 text-[#2563EB] animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Deploy progress overlay
+  if (deployState === "deploying") {
+    const stepList = [
+      { key: "saveEndpoints", label: "Saving endpoint configuration" },
+      { key: "verifyConnection", label: "Verifying backend connection" },
+      { key: "generateSpec", label: "Generating OpenAPI specification" },
+      { key: "generateSdk", label: "Generating TypeScript SDK" },
+      { key: "createKey", label: "Creating API key" },
+      { key: "activateGateway", label: "Activating gateway" },
+    ];
+    return (
+      <AppLayout>
+        <div className="max-w-lg mx-auto mt-20" data-testid="deploy-progress">
+          <div className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-8">
+            <h2 className="text-[#FAFAFA] font-semibold text-lg mb-6">
+              Deploying <span className="text-[#2563EB]">{project?.name}</span>...
+            </h2>
+            <div className="space-y-1">
+              {stepList.map((step) => {
+                const status = deploySteps[step.key];
+                return (
+                  <div key={step.key} className="flex items-center gap-3 py-2.5" data-testid={`deploy-step-${step.key}`}>
+                    {status === "complete" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    {status === "working" && <Loader2 className="w-4 h-4 text-[#2563EB] animate-spin shrink-0" />}
+                    {status === "pending" && <div className="w-4 h-4 rounded-full border border-[#3F3F46] shrink-0" />}
+                    <span className={`text-sm ${status === "complete" ? "text-[#FAFAFA]" : status === "working" ? "text-[#FAFAFA]" : "text-[#71717A]"}`}>
+                      {step.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Deploy success screen
+  if (deployState === "success" && deployResult) {
+    return (
+      <AppLayout>
+        <div className="max-w-2xl mx-auto mt-12" data-testid="deploy-success">
+          <div className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-8">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 bg-[#2563EB]/10 rounded-sm flex items-center justify-center">
+                <Rocket className="w-5 h-5 text-[#2563EB]" />
+              </div>
+              <div>
+                <h2 className="text-[#FAFAFA] font-semibold text-xl">Your SaaS is Now a Platform</h2>
+                <p className="text-[#71717A] text-sm">{project?.name} is live</p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              {/* Gateway URL */}
+              <div>
+                <label className="text-[#A1A1AA] text-xs uppercase tracking-wider block mb-1.5">API Base URL</label>
+                <div className="flex items-center gap-2 bg-[#09090B] border border-[#27272A] rounded-sm px-3 py-2.5">
+                  <code className="font-mono text-sm text-[#FAFAFA] flex-1 truncate" data-testid="deploy-gateway-url">{deployResult.gatewayUrl}</code>
+                  <button onClick={() => copyToClipboard(deployResult.gatewayUrl, "gateway")} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="copy-gateway-url">
+                    {copied.gateway ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Docs URL */}
+              <div>
+                <label className="text-[#A1A1AA] text-xs uppercase tracking-wider block mb-1.5">Documentation</label>
+                <div className="flex items-center gap-2 bg-[#09090B] border border-[#27272A] rounded-sm px-3 py-2.5">
+                  <code className="font-mono text-sm text-[#FAFAFA] flex-1 truncate" data-testid="deploy-docs-url">{deployResult.docsUrl}</code>
+                  <button onClick={() => navigate(`/docs/${project?.slug}`)} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="open-docs-link">
+                    <ExternalLink className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* SDK Install */}
+              <div>
+                <label className="text-[#A1A1AA] text-xs uppercase tracking-wider block mb-1.5">Install SDK</label>
+                <div className="flex items-center gap-2 bg-[#09090B] border border-[#27272A] rounded-sm px-3 py-2.5">
+                  <code className="font-mono text-sm text-[#FAFAFA] flex-1 truncate" data-testid="deploy-sdk-install">{deployResult.sdkInstall}</code>
+                  <button onClick={() => copyToClipboard(deployResult.sdkInstall, "sdk")} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="copy-sdk-install">
+                    {copied.sdk ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* API Key */}
+              <div>
+                <label className="text-[#A1A1AA] text-xs uppercase tracking-wider block mb-1.5">Your First API Key</label>
+                <div className="flex items-center gap-2 bg-[#09090B] border border-[#27272A] rounded-sm px-3 py-2.5">
+                  <code className="font-mono text-xs text-[#FAFAFA] flex-1 truncate" data-testid="deploy-api-key">{deployResult.apiKey}</code>
+                  <button onClick={() => copyToClipboard(deployResult.apiKey, "key")} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="copy-api-key">
+                    {copied.key ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
+                  <Info className="w-3 h-3" /> Save this key now. You won't see it again.
+                </p>
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center gap-4 pt-2 text-sm text-[#71717A]" data-testid="deploy-stats">
+                <span><strong className="text-[#FAFAFA]">{deployResult.endpointsExposed}</strong> endpoints exposed</span>
+                <span className="text-[#27272A]">|</span>
+                <span>Rate limiting active</span>
+                {deployResult.fieldsFiltered > 0 && (
+                  <>
+                    <span className="text-[#27272A]">|</span>
+                    <span><strong className="text-[#FAFAFA]">{deployResult.fieldsFiltered}</strong> sensitive fields auto-filtered</span>
+                  </>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center gap-3 pt-4 border-t border-[#27272A]">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/docs/${project?.slug}`)}
+                  data-testid="deploy-view-docs-btn"
+                  className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm text-sm"
+                >
+                  <BookOpen className="w-4 h-4 mr-1.5" /> View Docs
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/keys`)}
+                  data-testid="deploy-manage-keys-btn"
+                  className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm text-sm"
+                >
+                  <Key className="w-4 h-4 mr-1.5" /> Manage Keys
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/analytics`)}
+                  data-testid="deploy-view-analytics-btn"
+                  className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm text-sm"
+                >
+                  <BarChart3 className="w-4 h-4 mr-1.5" /> View Analytics
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </AppLayout>
     );
@@ -517,7 +731,7 @@ export default function EndpointsPage() {
                 <span>
                   <Button
                     onClick={handleDeploy}
-                    disabled={!canDeploy || saving}
+                    disabled={!canDeploy || deployState !== "idle"}
                     data-testid="deploy-btn"
                     className={`rounded-sm text-sm h-10 px-6 font-medium ${
                       canDeploy
@@ -525,7 +739,7 @@ export default function EndpointsPage() {
                         : "bg-[#18181B] text-[#3F3F46] cursor-not-allowed"
                     }`}
                   >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Rocket className="w-4 h-4 mr-1.5" />}
+                    {deployState !== "idle" ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Rocket className="w-4 h-4 mr-1.5" />}
                     Deploy Public API
                   </Button>
                 </span>

@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-04-16T09:13:39.998659",
-  "total_tests": 19,
-  "passed_tests": 19,
-  "success_rate": "100.0%",
+  "timestamp": "2026-04-16T09:54:39.469655",
+  "total_tests": 27,
+  "passed_tests": 23,
+  "success_rate": "85.2%",
   "results": [
     {
       "test": "POST /api/auth/register",
       "success": true,
-      "details": "User created with ID: 69e0a7d2a4e9ab2d5293df19",
+      "details": "User created with ID: 69e0b172dd7ab63a17199549",
       "response_data": null
     },
     {
       "test": "GET /api/auth/me",
       "success": true,
-      "details": "User info retrieved: test_091146@example.com",
+      "details": "User info retrieved: test_095249@example.com",
       "response_data": null
     },
     {
       "test": "POST /api/projects",
       "success": true,
-      "details": "Project created with ID: 69e0a7d3a4e9ab2d5293df1a",
+      "details": "Project created with ID: 69e0b172dd7ab63a1719954a",
       "response_data": null
     },
     {
@@ -31,7 +31,7 @@
     {
       "test": "GET /api/projects/:id",
       "success": true,
-      "details": "Project retrieved: Test Project 091147",
+      "details": "Project retrieved: Test Project 095250",
       "response_data": null
     },
     {
@@ -71,6 +71,54 @@
       "response_data": null
     },
     {
+      "test": "Gateway missing API key",
+      "success": true,
+      "details": "Expected 401 missing_api_key, got 401 missing_api_key",
+      "response_data": null
+    },
+    {
+      "test": "Gateway invalid API key",
+      "success": true,
+      "details": "Expected 403 invalid_api_key, got 403 invalid_api_key",
+      "response_data": null
+    },
+    {
+      "test": "Gateway endpoint not found",
+      "success": true,
+      "details": "Expected 404 endpoint_not_found, got 404 endpoint_not_found",
+      "response_data": null
+    },
+    {
+      "test": "Gateway project not found",
+      "success": true,
+      "details": "Expected 404 project_not_found, got 404 project_not_found",
+      "response_data": null
+    },
+    {
+      "test": "Gateway backend unreachable",
+      "success": false,
+      "details": "Expected 502 backend_unreachable, got 502 auth_failed",
+      "response_data": null
+    },
+    {
+      "test": "Gateway response headers",
+      "success": false,
+      "details": "Missing headers: X-Powered-By",
+      "response_data": null
+    },
+    {
+      "test": "Deploy endpoint",
+      "success": false,
+      "details": "Deploy request failed",
+      "response_data": null
+    },
+    {
+      "test": "OpenAPI spec endpoint",
+      "success": true,
+      "details": "Valid OpenAPI spec version 3.0.0",
+      "response_data": null
+    },
+    {
       "test": "Demo fallback scan",
       "success": true,
       "details": "QuickBite demo scan found 21 routes",
@@ -78,8 +126,8 @@
     },
     {
       "test": "POST /api/auth/logout",
-      "success": true,
-      "details": "Logout successful",
+      "success": false,
+      "details": "Request failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))",
       "response_data": null
     },
     {

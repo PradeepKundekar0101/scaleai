@@ -128,7 +128,7 @@ def extract_json(text: str) -> dict:
 
 
 async def call_claude(system_prompt: str, user_message: str) -> dict:
-    """Call Claude via emergentintegrations with retry."""
+    """Call Claude via emergentintegrations with retry. Returns parsed JSON."""
     api_key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not api_key:
         raise ValueError("EMERGENT_LLM_KEY not set")
@@ -153,6 +153,33 @@ async def call_claude(system_prompt: str, user_message: str) -> dict:
             raise
 
     raise RuntimeError("Claude API failed after retries")
+
+
+async def call_claude_text(system_prompt: str, user_message: str) -> str:
+    """Call Claude via emergentintegrations with retry. Returns raw text."""
+    api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not api_key:
+        raise ValueError("EMERGENT_LLM_KEY not set")
+
+    for attempt in range(2):
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"scalable-sdk-{uuid.uuid4().hex[:8]}",
+                system_message=system_prompt,
+            )
+            chat.with_model("anthropic", "claude-4-sonnet-20250514")
+
+            msg = UserMessage(text=user_message)
+            response = await chat.send_message(msg)
+            return response
+        except Exception as e:
+            logger.error(f"Claude text API attempt {attempt + 1} failed: {e}")
+            if attempt == 0:
+                continue
+            raise
+
+    raise RuntimeError("Claude text API failed after retries")
 
 
 async def analyze_code(files: dict) -> dict:

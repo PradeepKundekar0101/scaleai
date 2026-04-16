@@ -633,8 +633,209 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
         }
 
 @api_router.post("/projects/{project_id}/deploy")
-async def deploy_project(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+async def deploy_project(project_id: str, request: Request, user: dict = Depends(get_current_user)):
+    from ai_agents import call_claude, call_claude_text
+    import hashlib
+
+    # Verify ownership
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Load exposed endpoints
+    endpoints = await db.exposed_endpoints.find(
+        {"project_id": ObjectId(project_id), "is_active": True}
+    ).to_list(500)
+
+    if not endpoints:
+        raise HTTPException(status_code=400, detail="No endpoints configured. Select endpoints first.")
+
+    slug = project.get("slug", "")
+    project_name = project.get("name", "Project")
+
+    # Build backend URL for gateway
+    frontend_url = os.environ.get("FRONTEND_URL", os.environ.get("CORS_ORIGINS", ""))
+    if frontend_url and frontend_url != "*":
+        first_origin = frontend_url.split(",")[0].strip()
+    else:
+        first_origin = ""
+    gateway_base_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    # Prepare endpoint list for AI
+    ep_list = []
+    total_stripped = 0
+    for ep in endpoints:
+        stripped = ep.get("fields_to_strip", [])
+        total_stripped += len(stripped)
+        ep_list.append({
+            "method": ep.get("method", ""),
+            "path": ep.get("path", ""),
+            "description": ep.get("description", ""),
+            "fieldsToStrip": stripped,
+            "rateLimit": ep.get("rate_limit", 100),
+        })
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Generate OpenAPI spec
+    openapi_spec = None
+    try:
+        spec_system = f"""You are an API Schema Designer. Generate a complete OpenAPI 3.0 specification in JSON format from the provided endpoint list.
+
+Requirements:
+- Authentication: API Key via X-API-Key header (securitySchemes)
+- Include realistic example values in all request/response schemas
+- Sensitive fields that are marked for stripping must NOT appear in response schemas
+- Include standard error responses on every endpoint: 401 (missing key), 403 (invalid key), 404 (not found), 429 (rate limited)
+- Group endpoints by resource using tags (e.g., Orders, Products, Restaurants)
+- Include rate limit response headers in descriptions: X-RateLimit-Limit, X-RateLimit-Remaining
+- info section: title = "{project_name} API", version = "1.0.0", description includes "Powered by Scalable"
+- servers: [{{"url": "{gateway_base_url}"}}]
+
+Return ONLY the complete OpenAPI 3.0 JSON object. No markdown, no explanation."""
+
+        import json as json_module
+        spec_result = await call_claude(spec_system, json_module.dumps(ep_list, indent=2))
+        if spec_result and isinstance(spec_result, dict):
+            openapi_spec = spec_result
+    except Exception as e:
+        logger.error(f"OpenAPI spec generation failed: {e}")
+
+    # Fallback: generate basic spec programmatically
+    if not openapi_spec:
+        paths = {}
+        for ep in ep_list:
+            path_key = ep["path"]
+            if path_key not in paths:
+                paths[path_key] = {}
+            paths[path_key][ep["method"].lower()] = {
+                "summary": ep["description"],
+                "security": [{"ApiKeyAuth": []}],
+                "responses": {
+                    "200": {"description": "Success"},
+                    "401": {"description": "Missing API key"},
+                    "403": {"description": "Invalid API key"},
+                    "429": {"description": "Rate limit exceeded"},
+                },
+            }
+        openapi_spec = {
+            "openapi": "3.0.3",
+            "info": {"title": f"{project_name} API", "version": "1.0.0", "description": f"Powered by Scalable"},
+            "servers": [{"url": gateway_base_url}],
+            "components": {"securitySchemes": {"ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}},
+            "paths": paths,
+        }
+
+    # Generate TypeScript SDK
+    sdk_code = None
+    try:
+        sdk_system = f"""You are a TypeScript SDK generator. Generate a complete, single-file typed SDK from an OpenAPI specification.
+
+Requirements:
+- Use axios for HTTP requests
+- Export a main class: ScalableClient
+- Constructor accepts: {{ apiKey: string, baseUrl?: string }}
+- Typed interfaces for ALL request and response schemas
+- Resource-based method organization (e.g., client.orders.list(), client.products.get(id))
+- Comprehensive JSDoc comments on every method
+- ScalableError class with statusCode, errorCode, and message
+- Automatically sets X-API-Key header on every request
+- Default baseUrl: "{gateway_base_url}"
+
+Return ONLY TypeScript code. No markdown, no code blocks, no explanation. Just the .ts file contents."""
+
+        import json as json_module
+        sdk_result = await call_claude_text(sdk_system, json_module.dumps(openapi_spec, indent=2))
+        if sdk_result:
+            sdk_code = sdk_result
+            # Strip markdown code blocks if present
+            if sdk_code.strip().startswith("```"):
+                lines = sdk_code.strip().split("\n")
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                sdk_code = "\n".join(lines)
+    except Exception as e:
+        logger.error(f"SDK generation failed: {e}")
+
+    # Fallback: basic SDK template
+    if not sdk_code:
+        methods = []
+        for ep in ep_list:
+            method_name = ep["path"].split("/")[-1].replace(":", "").replace("-", "_")
+            http_method = ep["method"].lower()
+            methods.append(f'  /** {ep["description"]} */\n  async {method_name}(): Promise<any> {{ return this.request("{http_method}", "{ep["path"]}"); }}')
+        sdk_code = f"""import axios, {{ AxiosInstance }} from 'axios';
+
+export class ScalableError extends Error {{
+  constructor(public statusCode: number, public errorCode: string, message: string) {{
+    super(message);
+    this.name = 'ScalableError';
+  }}
+}}
+
+export class ScalableClient {{
+  private client: AxiosInstance;
+
+  constructor(config: {{ apiKey: string; baseUrl?: string }}) {{
+    this.client = axios.create({{
+      baseURL: config.baseUrl || '{gateway_base_url}',
+      headers: {{ 'X-API-Key': config.apiKey }},
+    }});
+  }}
+
+  private async request(method: string, path: string, data?: any): Promise<any> {{
+    const resp = await this.client.request({{ method, url: path, data }});
+    return resp.data;
+  }}
+
+{chr(10).join(methods)}
+}}
+"""
+
+    # Generate API key
+    raw_key = f"sk_live_{secrets.token_hex(24)}"
+    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    key_prefix = raw_key[:16]
+    all_paths = [ep.get("path", "") for ep in endpoints]
+
+    await db.api_keys.insert_one({
+        "key_hash": key_hash,
+        "key_prefix": key_prefix,
+        "project_id": ObjectId(project_id),
+        "name": "Default Key",
+        "allowed_endpoints": all_paths,
+        "rate_limit": 100,
+        "is_active": True,
+        "created_at": now,
+    })
+
+    # Update project to live
+    await db.projects.update_one(
+        {"_id": ObjectId(project_id)},
+        {"$set": {
+            "open_api_spec": openapi_spec,
+            "sdk_code": sdk_code,
+            "status": "live",
+            "updated_at": now,
+        }}
+    )
+
+    return {
+        "status": "live",
+        "gatewayUrl": gateway_base_url,
+        "docsUrl": f"/docs/{slug}",
+        "sdkInstall": f"npm install @scalable/{slug}",
+        "apiKey": raw_key,
+        "endpointsExposed": len(ep_list),
+        "fieldsFiltered": total_stripped,
+    }
 
 @api_router.post("/projects/{project_id}/keys")
 async def create_api_key(project_id: str, user: dict = Depends(get_current_user)):
@@ -654,11 +855,31 @@ async def get_analytics(project_id: str, user: dict = Depends(get_current_user))
 
 @api_router.get("/projects/{slug}/spec")
 async def get_spec(slug: str):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    project = await db.projects.find_one({"slug": slug})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    spec = project.get("open_api_spec")
+    if not spec:
+        raise HTTPException(status_code=404, detail="OpenAPI spec not generated yet. Deploy the project first.")
+    return spec
 
 # ── Include router ───────────────────────────────────────
 
 app.include_router(api_router)
+
+# ── Gateway catch-all (MUST be after api_router) ─────────
+
+from fastapi.responses import JSONResponse
+
+@app.api_route("/api/gateway/{project_slug}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
+async def gateway_route(project_slug: str, path: str, request: Request):
+    from gateway import gateway_handler
+    result = await gateway_handler(project_slug, path, request, db)
+    return JSONResponse(
+        status_code=result["status"],
+        content=result["body"],
+        headers=result.get("headers", {}),
+    )
 
 # ── Startup ──────────────────────────────────────────────
 

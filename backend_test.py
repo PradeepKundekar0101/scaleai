@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Scalable Platform
-Tests all auth and project endpoints with proper error handling
+Backend API Testing for Scalable Platform - Phase 4: Gateway + Deploy Flow
+Tests all auth, project endpoints, API Gateway, and deploy functionality
 """
 
 import requests
 import sys
 import json
+import time
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -507,11 +508,173 @@ class ScalableAPITester:
         self.token = old_token
         return all_passed
 
+    def test_gateway_endpoints(self):
+        """Test Phase 4 API Gateway functionality"""
+        print("\n🌐 Testing API Gateway (Phase 4)...")
+        
+        # Test data from review request
+        test_api_key = "sk_live_test_key_for_gateway_testing"
+        live_project_slug = "quickbite-api-3"
+        
+        # Test 1: Gateway without API key returns 401
+        url = f"{self.base_url}/api/gateway/{live_project_slug}/api/products"
+        try:
+            response = requests.get(url, timeout=10)
+            success = response.status_code == 401
+            if success:
+                data = response.json()
+                expected_error = data.get('error') == 'missing_api_key'
+                self.log_test("Gateway missing API key", expected_error, 
+                            f"Expected 401 missing_api_key, got {response.status_code} {data.get('error', '')}")
+            else:
+                self.log_test("Gateway missing API key", False, 
+                            f"Expected 401, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Gateway missing API key", False, f"Error: {str(e)}")
+        
+        # Test 2: Gateway with invalid API key returns 403
+        try:
+            headers = {"X-API-Key": "invalid_key_12345"}
+            response = requests.get(url, headers=headers, timeout=10)
+            success = response.status_code == 403
+            if success:
+                data = response.json()
+                expected_error = data.get('error') == 'invalid_api_key'
+                self.log_test("Gateway invalid API key", expected_error,
+                            f"Expected 403 invalid_api_key, got {response.status_code} {data.get('error', '')}")
+            else:
+                self.log_test("Gateway invalid API key", False,
+                            f"Expected 403, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Gateway invalid API key", False, f"Error: {str(e)}")
+        
+        # Test 3: Gateway with valid key but unexposed endpoint returns 404
+        admin_url = f"{self.base_url}/api/gateway/{live_project_slug}/api/admin/stats"
+        try:
+            headers = {"X-API-Key": test_api_key}
+            response = requests.get(admin_url, headers=headers, timeout=10)
+            success = response.status_code == 404
+            if success:
+                data = response.json()
+                expected_error = data.get('error') == 'endpoint_not_found'
+                self.log_test("Gateway endpoint not found", expected_error,
+                            f"Expected 404 endpoint_not_found, got {response.status_code} {data.get('error', '')}")
+            else:
+                self.log_test("Gateway endpoint not found", False,
+                            f"Expected 404, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Gateway endpoint not found", False, f"Error: {str(e)}")
+        
+        # Test 4: Gateway with nonexistent project returns 404
+        nonexistent_url = f"{self.base_url}/api/gateway/nonexistent/api/test"
+        try:
+            headers = {"X-API-Key": test_api_key}
+            response = requests.get(nonexistent_url, headers=headers, timeout=10)
+            success = response.status_code == 404
+            if success:
+                data = response.json()
+                expected_error = data.get('error') == 'project_not_found'
+                self.log_test("Gateway project not found", expected_error,
+                            f"Expected 404 project_not_found, got {response.status_code} {data.get('error', '')}")
+            else:
+                self.log_test("Gateway project not found", False,
+                            f"Expected 404, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Gateway project not found", False, f"Error: {str(e)}")
+        
+        # Test 5: Gateway with valid key returns 502 (backend unreachable)
+        try:
+            headers = {"X-API-Key": test_api_key}
+            response = requests.get(url, headers=headers, timeout=15)
+            success = response.status_code == 502
+            if success:
+                data = response.json()
+                expected_error = data.get('error') == 'backend_unreachable'
+                self.log_test("Gateway backend unreachable", expected_error,
+                            f"Expected 502 backend_unreachable, got {response.status_code} {data.get('error', '')}")
+            else:
+                self.log_test("Gateway backend unreachable", False,
+                            f"Expected 502, got {response.status_code}")
+        except Exception as e:
+            self.log_test("Gateway backend unreachable", False, f"Error: {str(e)}")
+        
+        # Test 6: Gateway response headers
+        try:
+            headers = {"X-API-Key": test_api_key}
+            response = requests.get(url, headers=headers, timeout=15)
+            
+            has_rate_limit = 'X-RateLimit-Limit' in response.headers
+            has_powered_by = 'X-Powered-By' in response.headers
+            
+            if has_rate_limit and has_powered_by:
+                self.log_test("Gateway response headers", True,
+                            f"X-RateLimit-Limit: {response.headers.get('X-RateLimit-Limit')}, X-Powered-By: {response.headers.get('X-Powered-By')}")
+            else:
+                missing = []
+                if not has_rate_limit:
+                    missing.append('X-RateLimit-Limit')
+                if not has_powered_by:
+                    missing.append('X-Powered-By')
+                self.log_test("Gateway response headers", False, f"Missing headers: {', '.join(missing)}")
+        except Exception as e:
+            self.log_test("Gateway response headers", False, f"Error: {str(e)}")
+
+    def test_deploy_flow(self):
+        """Test Phase 4 Deploy Flow functionality"""
+        print("\n🚀 Testing Deploy Flow (Phase 4)...")
+        
+        # Test deploy endpoint (requires auth)
+        if not self.token:
+            self.log_test("Deploy endpoint", False, "No auth token available")
+            return
+        
+        configuring_project_id = "69e0a1cc7dd571fbbabaae6d"
+        
+        # Test deploy endpoint with longer timeout due to AI calls
+        success, response = self.make_request(
+            'POST', 
+            f'projects/{configuring_project_id}/deploy',
+            expected_status=200,
+            use_auth=True,
+            timeout=90  # Extended timeout for AI calls
+        )
+        
+        if success:
+            # Check required fields in response
+            required_fields = ['status', 'gatewayUrl', 'docsUrl', 'sdkInstall', 'apiKey']
+            missing_fields = [f for f in required_fields if f not in response]
+            if not missing_fields:
+                self.log_test("Deploy endpoint response", True,
+                            f"Gateway URL: {response.get('gatewayUrl')}, API Key: {response.get('apiKey', '')[:20]}...")
+            else:
+                self.log_test("Deploy endpoint response", False, f"Missing fields: {missing_fields}")
+        else:
+            self.log_test("Deploy endpoint", False, "Deploy request failed")
+        
+        # Test OpenAPI spec endpoint (public, no auth required)
+        live_project_slug = "quickbite-api-3"
+        spec_success, spec_response = self.make_request(
+            'GET',
+            f'projects/{live_project_slug}/spec',
+            expected_status=200,
+            use_auth=False
+        )
+        
+        if spec_success:
+            # Check if it's a valid OpenAPI spec
+            if isinstance(spec_response, dict) and 'openapi' in spec_response:
+                self.log_test("OpenAPI spec endpoint", True,
+                            f"Valid OpenAPI spec version {spec_response.get('openapi')}")
+            else:
+                self.log_test("OpenAPI spec endpoint", False, "Invalid OpenAPI spec format")
+        else:
+            self.log_test("OpenAPI spec endpoint", False, "Spec endpoint failed")
+
     def run_all_tests(self):
-        """Run all API tests"""
-        print("🚀 Starting Scalable API Tests - Phase 3")
+        """Run all API tests including Phase 4 Gateway + Deploy Flow"""
+        print("🚀 Starting Scalable API Tests - Phase 4: Gateway + Deploy Flow")
         print(f"Testing against: {self.base_url}")
-        print("=" * 50)
+        print("=" * 60)
         
         # Test registration first
         if not self.test_auth_register():
@@ -538,6 +701,10 @@ class ScalableAPITester:
         self.test_project_test_connection()
         self.test_project_endpoints_save()
         
+        # Test Phase 4 new features
+        self.test_gateway_endpoints()
+        self.test_deploy_flow()
+        
         # Test demo fallback
         self.test_demo_fallback()
         
@@ -553,7 +720,7 @@ class ScalableAPITester:
         # Test GitHub OAuth stubs
         self.test_github_oauth_stubs()
         
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
         
         if self.tests_passed == self.tests_run:
