@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -19,17 +20,19 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Toaster
-          theme="dark"
+          theme="light"
           position="top-right"
           toastOptions={{
             style: {
-              background: "#0F0F12",
-              border: "1px solid #27272A",
-              color: "#FAFAFA",
+              background: "#ffffff",
+              border: "1px solid #dcd7d3",
+              color: "#292827",
+              borderRadius: "8px",
             },
           }}
         />
         <Routes>
+          <Route path="/landing" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />

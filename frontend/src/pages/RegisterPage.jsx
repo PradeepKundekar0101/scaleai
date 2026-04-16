@@ -1,144 +1,113 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Github, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-const AUTH_BG = "https://static.prod-images.emergentagent.com/jobs/667b9152-5f4f-4a8b-9879-e37549147a68/images/95258b6860400655d16c62e09d214a8dcd9aa398c084933ca6ea3caf50b5220d.png";
+import { ArrowRight, Loader2 } from "lucide-react";
 
 export default function RegisterPage() {
-  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  if (authLoading) return null;
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
+    if (password.length < 6) return toast.error("Password must be at least 6 characters");
     setLoading(true);
     const result = await register(name, email, password);
     setLoading(false);
-    if (!result.success) {
-      setError(result.error);
+    if (result.success) {
+      navigate("/");
+    } else {
+      toast.error(result.error || "Registration failed");
     }
   };
 
-  const handleGithub = () => {
-    toast.info("GitHub OAuth coming soon");
-  };
-
   return (
-    <div className="min-h-screen flex bg-[#09090B]" data-testid="register-page">
-      {/* Left: Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-sm space-y-8">
-          <div>
-            <h1 className="text-[#2563EB] font-semibold text-2xl tracking-tight" data-testid="register-logo">Scalable</h1>
-            <p className="text-[#A1A1AA] text-sm mt-1">Create your account</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4" data-testid="register-form">
-            {error && (
-              <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 px-3 py-2 rounded-sm" data-testid="register-error">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="name" className="text-[#A1A1AA] text-xs uppercase tracking-wider">Name</Label>
-              <Input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name"
-                data-testid="register-name-input"
-                className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-[#A1A1AA] text-xs uppercase tracking-wider">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                data-testid="register-email-input"
-                className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-[#A1A1AA] text-xs uppercase tracking-wider">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                data-testid="register-password-input"
-                className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
-                required
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={loading}
-              data-testid="register-submit-btn"
-              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm h-10 text-sm font-medium"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Account"}
-            </Button>
-          </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#27272A]" /></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-[#09090B] px-2 text-[#71717A]">or</span></div>
-          </div>
-
-          <Button
-            variant="outline"
-            onClick={handleGithub}
-            data-testid="register-github-btn"
-            className="w-full border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm h-10 text-sm"
-          >
-            <Github className="w-4 h-4 mr-2" />
-            Continue with GitHub
-          </Button>
-
-          <p className="text-center text-sm text-[#71717A]">
-            Already have an account?{" "}
-            <Link to="/login" data-testid="register-login-link" className="text-[#2563EB] hover:underline">
-              Sign in
-            </Link>
+    <div className="min-h-screen bg-white flex">
+      {/* Left: Decorative */}
+      <div className="hidden lg:flex flex-1 bg-[#1b1938] items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-1/3 right-1/3 w-72 h-72 bg-[#cbb7fb]/25 rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 left-1/4 w-56 h-56 bg-[#714cb6]/20 rounded-full blur-3xl" />
+        </div>
+        <div className="relative text-center px-12">
+          <h2 className="text-4xl font-semibold text-white/95 leading-[0.96] tracking-tight mb-4">
+            Start building<br />your platform
+          </h2>
+          <p className="text-white/60 text-base max-w-sm mx-auto leading-relaxed">
+            Connect, configure, deploy — all in minutes
           </p>
         </div>
       </div>
 
-      {/* Right: Visual */}
-      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden border-l border-[#27272A]">
-        <img src={AUTH_BG} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#09090B] via-transparent to-transparent" />
-        <div className="absolute bottom-12 left-12 right-12">
-          <p className="text-[#FAFAFA] text-xl font-medium tracking-tight">Ship your API platform faster.</p>
-          <p className="text-[#71717A] text-sm mt-2">Automated route discovery, security scanning, and SDK generation.</p>
+      {/* Right: Form */}
+      <div className="flex-1 flex items-center justify-center px-8">
+        <div className="w-full max-w-sm">
+          <Link to="/landing" className="flex items-center gap-2.5 mb-12">
+            <div className="w-8 h-8 bg-[#1b1938] rounded-lg flex items-center justify-center">
+              <span className="text-white text-sm font-bold">S</span>
+            </div>
+            <span className="text-[#292827] font-semibold text-xl tracking-tight">Scalable</span>
+          </Link>
+
+          <h1 className="text-3xl font-semibold text-[#292827] leading-[0.96] tracking-tight mb-2">Create your account</h1>
+          <p className="text-[#292827]/50 text-sm mb-8">Get started with Scalable in seconds</p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-[#292827] mb-1.5">Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                required
+                data-testid="register-name"
+                className="w-full h-11 px-3.5 border border-[#dcd7d3] rounded-lg text-[#292827] text-sm placeholder:text-[#292827]/30 focus:outline-none focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 transition-colors bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#292827] mb-1.5">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                required
+                data-testid="register-email"
+                className="w-full h-11 px-3.5 border border-[#dcd7d3] rounded-lg text-[#292827] text-sm placeholder:text-[#292827]/30 focus:outline-none focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 transition-colors bg-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-[#292827] mb-1.5">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 6 characters"
+                required
+                minLength={6}
+                data-testid="register-password"
+                className="w-full h-11 px-3.5 border border-[#dcd7d3] rounded-lg text-[#292827] text-sm placeholder:text-[#292827]/30 focus:outline-none focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 transition-colors bg-white"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              data-testid="register-submit"
+              className="w-full h-11 bg-[#292827] text-white rounded-lg text-sm font-semibold hover:bg-[#1a1918] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><span>Create Account</span><ArrowRight className="w-3.5 h-3.5" /></>}
+            </button>
+          </form>
+
+          <p className="text-sm text-[#292827]/50 text-center mt-8">
+            Already have an account?{" "}
+            <Link to="/login" className="text-[#714cb6] underline underline-offset-2 font-medium hover:text-[#5c3d99]">Sign in</Link>
+          </p>
         </div>
       </div>
     </div>

@@ -17,21 +17,21 @@ import { toast } from "sonner";
 
 function StatusBadge({ status }) {
   const styles = {
-    live: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
-    draft: "text-[#A1A1AA] bg-[#18181B] border-[#27272A]",
-    scanning: "text-[#2563EB] bg-blue-500/10 border-[#2563EB]/30",
-    configuring: "text-amber-400 bg-amber-400/10 border-amber-400/20",
+    live: "text-emerald-600 bg-emerald-50 border-emerald-200",
+    draft: "text-[#292827]/50 bg-[#f5f3f0] border-[#dcd7d3]",
+    scanning: "text-[#714cb6] bg-[#cbb7fb]/15 border-[#cbb7fb]/40",
+    configuring: "text-amber-600 bg-amber-50 border-amber-200",
   };
   return (
     <span
       data-testid={`status-badge-${status}`}
-      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 border rounded-sm ${styles[status] || styles.draft}`}
+      className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 border rounded-lg ${styles[status] || styles.draft}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${
-        status === "live" ? "bg-emerald-400" :
-        status === "scanning" ? "bg-[#2563EB] animate-pulse" :
-        status === "configuring" ? "bg-amber-400 animate-pulse" :
-        "bg-[#71717A]"
+        status === "live" ? "bg-emerald-600" :
+        status === "scanning" ? "bg-[#714cb6] animate-pulse" :
+        status === "configuring" ? "bg-amber-600 animate-pulse" :
+        "bg-[#292827]/30"
       }`} />
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
@@ -44,7 +44,7 @@ function ProjectCard({ project }) {
   return (
     <div
       data-testid={`project-card-${project.id}`}
-      className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-5 hover:border-[#3F3F46] transition-colors duration-200 cursor-pointer group"
+      className="bg-white border border-[#dcd7d3] rounded-2xl p-6 hover:border-[#cbb7fb]/60 transition-all duration-200 cursor-pointer group hover:shadow-sm"
       onClick={() => {
         if (project.status === "configuring" || project.status === "live") {
           navigate(`/endpoints/${project.id}`);
@@ -54,10 +54,10 @@ function ProjectCard({ project }) {
       }}
     >
       <div className="flex items-start justify-between mb-3">
-        <h3 className="text-[#FAFAFA] font-medium text-base">{project.name}</h3>
+        <h3 className="text-[#292827] font-semibold text-lg">{project.name}</h3>
         <StatusBadge status={project.status} />
       </div>
-      <div className="flex items-center gap-4 text-xs text-[#71717A] mb-4">
+      <div className="flex items-center gap-4 text-xs text-[#292827]/50 mb-4">
         <span>{project.exposedEndpointCount || project.endpointCount || 0} endpoints</span>
         {isLive && (
           <>
@@ -66,14 +66,14 @@ function ProjectCard({ project }) {
           </>
         )}
       </div>
-      <p className="font-mono text-xs text-[#3F3F46] truncate mb-4" data-testid={`project-slug-${project.id}`}>
+      <p className="font-mono text-xs text-[#292827]/40 truncate mb-4" data-testid={`project-slug-${project.id}`}>
         {isLive
           ? (process.env.REACT_APP_GATEWAY_DOMAIN
               ? `${project.slug}.${process.env.REACT_APP_GATEWAY_DOMAIN}`
               : `${process.env.REACT_APP_BACKEND_URL}/api/gateway/${project.slug}`)
           : `${project.slug}.${process.env.REACT_APP_GATEWAY_DOMAIN || 'gateway.usescale.ai'}`}
       </p>
-      <div className="flex items-center text-[#2563EB] text-sm font-medium group-hover:gap-2 transition-all duration-150">
+      <div className="flex items-center text-[#714cb6] text-sm font-medium group-hover:gap-2 transition-all duration-150">
         Manage <ArrowRight className="w-3.5 h-3.5 ml-1" />
       </div>
     </div>
@@ -84,19 +84,19 @@ function EmptyState({ onCreateClick }) {
   return (
     <div
       data-testid="empty-state"
-      className="flex flex-col items-center justify-center py-24 border border-dashed border-[#27272A] rounded-sm"
+      className="flex flex-col items-center justify-center py-24 border-2 border-dashed border-[#dcd7d3] rounded-2xl bg-[#f5f3f0]/30"
     >
-      <Box className="w-12 h-12 text-[#3F3F46] mb-4" strokeWidth={1} />
-      <h3 className="text-[#FAFAFA] font-medium text-lg mb-1">No projects yet</h3>
-      <p className="text-[#71717A] text-sm mb-6 text-center max-w-sm">
+      <Box className="w-12 h-12 text-[#292827]/20 mb-4" strokeWidth={1.5} />
+      <h3 className="text-[#292827] font-semibold text-lg mb-1">No projects yet</h3>
+      <p className="text-[#292827]/50 text-sm mb-6 text-center max-w-sm">
         Connect your first repository and turn your SaaS into a platform
       </p>
       <Button
         onClick={onCreateClick}
         data-testid="empty-state-create-btn"
-        className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm"
+        className="bg-[#e9e5dd] hover:bg-[#ddd8cf] text-[#292827] rounded-lg text-sm font-semibold h-10 px-5"
       >
-        Connect Repository <ArrowRight className="w-4 h-4 ml-1" />
+        Connect Repository <ArrowRight className="w-4 h-4 ml-1.5" />
       </Button>
     </div>
   );
@@ -148,13 +148,13 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8" data-testid="dashboard-header">
         <div>
-          <h1 className="text-[#FAFAFA] text-2xl font-semibold tracking-tight">Your Projects</h1>
-          <p className="text-[#71717A] text-sm mt-1">Manage your API gateways and platforms</p>
+          <h1 className="text-[#292827] text-3xl font-semibold tracking-tight leading-[0.96]">Your Projects</h1>
+          <p className="text-[#292827]/50 text-sm mt-1.5">Manage your API gateways and platforms</p>
         </div>
         <Button
           onClick={() => setModalOpen(true)}
           data-testid="new-project-btn"
-          className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm h-9"
+          className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg text-sm font-semibold h-10 px-5"
         >
           <Plus className="w-4 h-4 mr-1.5" /> New Project
         </Button>
@@ -164,14 +164,14 @@ export default function DashboardPage() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-testid="dashboard-skeleton">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-5 space-y-3">
+            <div key={i} className="bg-white border border-[#dcd7d3] rounded-2xl p-6 space-y-3">
               <div className="flex items-start justify-between">
-                <div className="h-5 w-32 bg-[#18181B] rounded-sm animate-pulse" />
-                <div className="h-5 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+                <div className="h-5 w-32 skeleton" />
+                <div className="h-5 w-16 skeleton" />
               </div>
-              <div className="h-3 w-48 bg-[#18181B] rounded-sm animate-pulse" />
-              <div className="h-3 w-full bg-[#18181B] rounded-sm animate-pulse" />
-              <div className="h-4 w-20 bg-[#18181B] rounded-sm animate-pulse mt-2" />
+              <div className="h-3 w-48 skeleton" />
+              <div className="h-3 w-full skeleton" />
+              <div className="h-4 w-20 skeleton mt-2" />
             </div>
           ))}
         </div>
@@ -187,33 +187,33 @@ export default function DashboardPage() {
 
       {/* Create Project Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="bg-[#0F0F12] border-[#27272A] rounded-sm shadow-none max-w-md" data-testid="create-project-modal">
+        <DialogContent className="bg-white border-[#dcd7d3] rounded-2xl shadow-xl max-w-md" data-testid="create-project-modal">
           <DialogHeader>
-            <DialogTitle className="text-[#FAFAFA] text-lg font-semibold">New Project</DialogTitle>
-            <DialogDescription className="text-[#71717A] text-sm">
+            <DialogTitle className="text-[#292827] text-xl font-semibold">New Project</DialogTitle>
+            <DialogDescription className="text-[#292827]/50 text-sm">
               Connect a repository to create an API gateway
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label className="text-[#A1A1AA] text-xs uppercase tracking-wider">Project Name</Label>
+              <Label className="text-[#292827] text-sm font-medium">Project Name</Label>
               <Input
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="QuickBite API"
                 data-testid="create-project-name-input"
-                className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
+                className="bg-white border-[#dcd7d3] text-[#292827] placeholder:text-[#292827]/30 focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 rounded-lg h-11"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-[#A1A1AA] text-xs uppercase tracking-wider">GitHub Repository URL</Label>
+              <Label className="text-[#292827] text-sm font-medium">GitHub Repository URL</Label>
               <Input
                 value={repoUrl}
                 onChange={(e) => setRepoUrl(e.target.value)}
                 placeholder="https://github.com/org/repo"
                 data-testid="create-project-repo-input"
-                className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
+                className="bg-white border-[#dcd7d3] text-[#292827] placeholder:text-[#292827]/30 focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 rounded-lg h-11"
                 required
               />
             </div>
@@ -223,7 +223,7 @@ export default function DashboardPage() {
                 variant="outline"
                 onClick={() => setModalOpen(false)}
                 data-testid="create-project-cancel-btn"
-                className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] rounded-sm text-sm"
+                className="border-[#dcd7d3] text-[#292827]/60 hover:bg-[#f5f3f0] hover:text-[#292827] rounded-lg text-sm"
               >
                 Cancel
               </Button>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
                 type="submit"
                 disabled={creating}
                 data-testid="create-project-submit-btn"
-                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm"
+                className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg text-sm font-semibold"
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Project"}
               </Button>
