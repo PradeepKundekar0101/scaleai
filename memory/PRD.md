@@ -53,15 +53,26 @@ Scalable is an AI-powered platform that helps SaaS companies convert into PaaS b
 - Dashboard project cards navigate to /endpoints for "configuring" status projects
 
 ## Prioritized Backlog
-### P0 (Phase 3)
-- Endpoint configuration page (/endpoints/:projectId) - toggle routes on/off, configure field stripping
-- API key generation and management
-- Deploy/publish gateway
+## What's Been Implemented (Phase 4 — April 16, 2026)
+- API Gateway reverse proxy at /api/gateway/{slug}/{path}:
+  - 11-step flow: resolve slug, validate API key, check endpoint exposure, rate limit, get auth token, forward request, filter response, log usage, set headers
+  - 401 missing key, 403 invalid key, 404 endpoint not found, 429 rate limited, 502 backend unreachable
+  - X-RateLimit-Limit/Remaining/Reset headers, X-Powered-By: Scalable
+  - Sensitive field stripping with recursive deep filter
+- Deploy endpoint (POST /api/projects/:id/deploy):
+  - Generates OpenAPI 3.0 spec (programmatic with optional AI enhancement)
+  - Generates TypeScript SDK with typed ScalableClient class
+  - Creates API key (sk_live_...) with SHA-256 hash
+  - Sets project status to "live"
+- Public OpenAPI spec endpoint (GET /api/projects/{slug}/spec)
+- Deploy progress overlay with 6 animated steps
+- Deploy success screen with gateway URL, docs URL, SDK install, API key + copy buttons
+- Dashboard shows "Live" badge with gateway URL for deployed projects
 
-### P1 (Phase 4)
-- Analytics dashboard with usage charts
-- Rate limiting enforcement on gateway
-- OpenAPI spec generation
+### P0 (Phase 5)
+- API docs viewer page (/docs/{slug}) - render OpenAPI spec
+- API keys management page (/keys) - CRUD operations
+- Analytics dashboard (/analytics) - usage logs visualization
 
 ### P2 (Phase 4)
 - SDK code generation
