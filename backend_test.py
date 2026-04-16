@@ -628,12 +628,15 @@ class ScalableAPITester:
             self.log_test("Deploy endpoint", False, "No auth token available")
             return
         
-        configuring_project_id = "69e0a1cc7dd571fbbabaae6d"
+        # Use the project we created in the test instead of hardcoded ID
+        if not hasattr(self, 'project_id'):
+            self.log_test("Deploy endpoint", False, "No project ID available")
+            return
         
         # Test deploy endpoint with longer timeout due to AI calls
         success, response = self.make_request(
             'POST', 
-            f'projects/{configuring_project_id}/deploy',
+            f'projects/{self.project_id}/deploy',
             expected_status=200,
             use_auth=True,
             timeout=90  # Extended timeout for AI calls

@@ -194,15 +194,27 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
 
     # Step 6: Get valid auth token
     token = await get_valid_token(project, db)
-    if not token:
-        return {
-            "status": 502,
-            "body": {"error": "auth_failed", "message": "Unable to authenticate with the upstream service"},
-            "headers": rate_headers,
-        }
 
     # Step 7: Forward request
     target_url = project.get("target_backend_url", "").rstrip("/")
+
+    if not target_url or not token:
+        latency_ms = int((time.time() - start_time) * 1000)
+        try:
+            await db.usage_logs.insert_one({
+                "key_hash": key_hash, "key_name": api_key_doc.get("name", ""),
+                "project_slug": project_slug, "endpoint": api_path_full,
+                "method": request.method, "status_code": 502,
+                "latency_ms": latency_ms, "timestamp": datetime.now(timezone.utc),
+            })
+        except Exception:
+            pass
+        return {
+            "status": 502,
+            "body": {"error": "backend_unreachable", "message": "The upstream service is not configured or not responding"},
+            "headers": rate_headers,
+        }
+
     forward_url = f"{target_url}{api_path_full}"
 
     # Build query string

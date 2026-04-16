@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-04-16T09:54:39.469655",
+  "timestamp": "2026-04-16T10:11:56.436254",
   "total_tests": 27,
-  "passed_tests": 23,
-  "success_rate": "85.2%",
+  "passed_tests": 27,
+  "success_rate": "100.0%",
   "results": [
     {
       "test": "POST /api/auth/register",
       "success": true,
-      "details": "User created with ID: 69e0b172dd7ab63a17199549",
+      "details": "User created with ID: 69e0b559aceb02840c651180",
       "response_data": null
     },
     {
       "test": "GET /api/auth/me",
       "success": true,
-      "details": "User info retrieved: test_095249@example.com",
+      "details": "User info retrieved: test_100929@example.com",
       "response_data": null
     },
     {
       "test": "POST /api/projects",
       "success": true,
-      "details": "Project created with ID: 69e0b172dd7ab63a1719954a",
+      "details": "Project created with ID: 69e0b559aceb02840c651181",
       "response_data": null
     },
     {
@@ -31,13 +31,13 @@
     {
       "test": "GET /api/projects/:id",
       "success": true,
-      "details": "Project retrieved: Test Project 095250",
+      "details": "Project retrieved: Test Project 100929",
       "response_data": null
     },
     {
       "test": "POST /api/projects/:id/scan",
       "success": true,
-      "details": "Scan completed: 21 routes found (G:10, Y:4, R:7)",
+      "details": "Scan completed: 21 routes found (G:11, Y:3, R:7)",
       "response_data": null
     },
     {
@@ -55,7 +55,7 @@
     {
       "test": "Enhanced GET /api/projects/:id",
       "success": true,
-      "details": "Enhanced fields present: breakdown={'green': 10, 'yellow': 4, 'red': 7}, discovered=21, exposed=0, connected=False",
+      "details": "Enhanced fields present: breakdown={'green': 11, 'yellow': 3, 'red': 7}, discovered=21, exposed=0, connected=False",
       "response_data": null
     },
     {
@@ -96,20 +96,20 @@
     },
     {
       "test": "Gateway backend unreachable",
-      "success": false,
-      "details": "Expected 502 backend_unreachable, got 502 auth_failed",
+      "success": true,
+      "details": "Expected 502 backend_unreachable, got 502 backend_unreachable",
       "response_data": null
     },
     {
       "test": "Gateway response headers",
-      "success": false,
-      "details": "Missing headers: X-Powered-By",
+      "success": true,
+      "details": "X-RateLimit-Limit: 200, X-Powered-By: Scalable",
       "response_data": null
     },
     {
-      "test": "Deploy endpoint",
-      "success": false,
-      "details": "Deploy request failed",
+      "test": "Deploy endpoint response",
+      "success": true,
+      "details": "Gateway URL: /api/gateway/test-project-100929, API Key: sk_live_30988fa1f1b4...",
       "response_data": null
     },
     {
@@ -126,8 +126,8 @@
     },
     {
       "test": "POST /api/auth/logout",
-      "success": false,
-      "details": "Request failed: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))",
+      "success": true,
+      "details": "Logout successful",
       "response_data": null
     },
     {
