@@ -12,6 +12,7 @@ import KeysPage from "@/pages/KeysPage";
 import DocsPage from "@/pages/DocsPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
+import ProjectSelectPage from "@/pages/ProjectSelectPage";
 
 function App() {
   return (
@@ -35,8 +36,11 @@ function App() {
           <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
           <Route path="/endpoints/:projectId" element={<ProtectedRoute><EndpointsPage /></ProtectedRoute>} />
           <Route path="/keys/:projectId" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
+          <Route path="/keys" element={<ProtectedRoute><ProjectSelectPage title="API Keys" description="Select a project to manage its API keys" buildPath={(p) => `/keys/${p.id}`} /></ProtectedRoute>} />
           <Route path="/docs/:slug" element={<DocsPage />} />
+          <Route path="/docs" element={<ProtectedRoute><ProjectSelectPage title="Documentation" description="Select a project to view its API documentation" buildPath={(p) => `/docs/${p.slug}`} /></ProtectedRoute>} />
           <Route path="/analytics/:projectId" element={<ProtectedRoute><AnalyticsPage /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute><ProjectSelectPage title="Analytics" description="Select a project to view its analytics" buildPath={(p) => `/analytics/${p.id}`} /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
         </Routes>
       </AuthProvider>

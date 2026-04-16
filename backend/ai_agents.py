@@ -9,8 +9,15 @@ import re
 import logging
 import uuid
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 from demo_scan_results import DEMO_CODE_ANALYSIS, DEMO_SECURITY_AUDIT
+
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+    _HAS_EMERGENT = True
+except ImportError:
+    _HAS_EMERGENT = False
+    LlmChat = None
+    UserMessage = None
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +136,8 @@ def extract_json(text: str) -> dict:
 
 async def call_claude(system_prompt: str, user_message: str) -> dict:
     """Call Claude via emergentintegrations with retry. Returns parsed JSON."""
+    if not _HAS_EMERGENT:
+        raise ImportError("emergentintegrations is not installed")
     api_key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not api_key:
         raise ValueError("EMERGENT_LLM_KEY not set")
@@ -157,6 +166,8 @@ async def call_claude(system_prompt: str, user_message: str) -> dict:
 
 async def call_claude_text(system_prompt: str, user_message: str) -> str:
     """Call Claude via emergentintegrations with retry. Returns raw text."""
+    if not _HAS_EMERGENT:
+        raise ImportError("emergentintegrations is not installed")
     api_key = os.environ.get("EMERGENT_LLM_KEY", "")
     if not api_key:
         raise ValueError("EMERGENT_LLM_KEY not set")

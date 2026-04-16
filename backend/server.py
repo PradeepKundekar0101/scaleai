@@ -1149,8 +1149,9 @@ async def startup():
         logger.info("Admin password updated")
 
     # Write test credentials
-    os.makedirs("/app/memory", exist_ok=True)
-    with open("/app/memory/test_credentials.md", "w") as f:
+    memory_dir = os.path.join(os.path.dirname(__file__), "memory")
+    os.makedirs(memory_dir, exist_ok=True)
+    with open(os.path.join(memory_dir, "test_credentials.md"), "w") as f:
         f.write("# Test Credentials\n\n")
         f.write(f"## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n\n")
         f.write("## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n- POST /api/auth/logout\n- POST /api/auth/refresh\n\n")
