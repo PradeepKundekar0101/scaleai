@@ -16,21 +16,45 @@ os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
 
 from demo_scan_results import DEMO_CODE_ANALYSIS, DEMO_SECURITY_AUDIT
 
+logger = logging.getLogger(__name__)
+
 try:
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     _HAS_EMERGENT = True
+    # Configure litellm to use short timeouts and no retries for deploy speed
     try:
         import litellm
         litellm.request_timeout = 30
         litellm.num_retries = 0
     except ImportError:
         pass
+    # Monkey-patch openai client to prevent internal retries
+    try:
+        import openai
+        openai.DEFAULT_MAX_RETRIES = 0
+        openai.DEFAULT_TIMEOUT = 30.0
+        # Also patch the class defaults
+        if hasattr(openai, 'AsyncOpenAI'):
+            _orig_async_init = openai.AsyncOpenAI.__init__
+            def _patched_async_init(self, *args, **kwargs):
+                kwargs.setdefault('max_retries', 0)
+                kwargs.setdefault('timeout', 30.0)
+                _orig_async_init(self, *args, **kwargs)
+            openai.AsyncOpenAI.__init__ = _patched_async_init
+        if hasattr(openai, 'OpenAI'):
+            _orig_sync_init = openai.OpenAI.__init__
+            def _patched_sync_init(self, *args, **kwargs):
+                kwargs.setdefault('max_retries', 0)
+                kwargs.setdefault('timeout', 30.0)
+                _orig_sync_init(self, *args, **kwargs)
+            openai.OpenAI.__init__ = _patched_sync_init
+        logger.info("Patched openai client: max_retries=0, timeout=30s")
+    except (ImportError, AttributeError, Exception) as e:
+        logger.warning(f"Could not patch openai client: {e}")
 except ImportError:
     _HAS_EMERGENT = False
     LlmChat = None
     UserMessage = None
-
-logger = logging.getLogger(__name__)
 
 CODE_ANALYST_SYSTEM_PROMPT = """You are a Code Analyst Agent for Scalable, a platform that helps SaaS companies expose their internal APIs as public APIs.
 
@@ -273,30 +297,49 @@ Return ONLY TypeScript code. No markdown, no code blocks, no explanation. Just r
 
 
 async def generate_openapi_spec_ai(project_name: str, gateway_url: str, endpoints: list) -> dict:
-    """Generate OpenAPI 3.0 spec using Claude AI. Falls back to None on failure."""
-    prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{projectName}", project_name).replace("{gatewayBaseUrl}", gateway_url)
-
-    ep_description = json.dumps(endpoints, indent=2)
-    user_msg = f"""Generate a complete OpenAPI 3.0 specification for the "{project_name}" API.
-
-Gateway Base URL: {gateway_url}
-
-Endpoints to document:
-{ep_description}
-
-Remember: Fields listed in fieldsToStrip are REMOVED from responses automatically — do NOT include them in response schemas."""
-
+    """Generate OpenAPI 3.0 spec using Claude AI in a subprocess with hard timeout."""
+    import subprocess
+    import tempfile
+    ep_json = json.dumps(endpoints)
+    script = f'''
+import os, json, sys, asyncio
+os.environ["OPENAI_MAX_RETRIES"] = "0"
+os.environ["OPENAI_TIMEOUT"] = "25"
+sys.path.insert(0, "/app/backend")
+from ai_agents import call_claude, OPENAPI_SCHEMA_DESIGNER_PROMPT
+prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{{projectName}}", {repr(project_name)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
+eps = {repr(ep_json)}
+user_msg = f"""Generate a complete OpenAPI 3.0 specification for the "{repr(project_name)}" API.\\nGateway Base URL: {repr(gateway_url)}\\nEndpoints:\\n{{eps}}\\nRemember: Fields listed in fieldsToStrip are REMOVED from responses automatically."""
+async def run():
+    result = await call_claude(prompt, user_msg)
+    print(json.dumps(result))
+asyncio.run(run())
+'''
     try:
-        result = await asyncio.wait_for(call_claude(prompt, user_msg), timeout=45)
-        # Validate it's a proper OpenAPI spec
-        if "openapi" in result and "paths" in result:
-            logger.info(f"AI generated OpenAPI spec with {len(result.get('paths', {}))} paths")
-            return result
-        else:
-            logger.warning("AI OpenAPI spec missing required fields")
-            return None
-    except asyncio.TimeoutError:
-        logger.warning("AI OpenAPI generation timed out (45s)")
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
+            f.write(script)
+            script_path = f.name
+
+        result = subprocess.run(
+            ["python3", script_path],
+            capture_output=True, text=True, timeout=40,
+            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+        )
+        os.unlink(script_path)
+
+        if result.returncode == 0 and result.stdout.strip():
+            spec = json.loads(result.stdout.strip())
+            if "openapi" in spec and "paths" in spec:
+                logger.info(f"AI generated OpenAPI spec with {len(spec.get('paths', {}))} paths")
+                return spec
+        logger.warning(f"AI OpenAPI subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("AI OpenAPI generation timed out (40s hard kill)")
+        try:
+            os.unlink(script_path)
+        except Exception:
+            pass
         return None
     except Exception as e:
         logger.error(f"AI OpenAPI generation failed: {e}")
@@ -304,30 +347,49 @@ Remember: Fields listed in fieldsToStrip are REMOVED from responses automaticall
 
 
 async def generate_sdk_ai(project_name: str, gateway_url: str, endpoints: list) -> str:
-    """Generate TypeScript SDK using Claude AI. Falls back to None on failure."""
-    prompt = SDK_GENERATOR_PROMPT.replace("{gatewayBaseUrl}", gateway_url)
-
-    ep_description = json.dumps(endpoints, indent=2)
-    user_msg = f"""Generate a complete TypeScript SDK for the "{project_name}" API.
-
-Gateway Base URL: {gateway_url}
-Package will be published as: @scalableai/{project_name.lower().replace(' ', '-')}
-
-Endpoints:
-{ep_description}
-
-Create typed interfaces for all request/response objects based on the endpoint descriptions. The SDK should be production-ready with full type safety."""
-
+    """Generate TypeScript SDK using Claude AI in a subprocess with hard timeout."""
+    import subprocess
+    import tempfile
+    ep_json = json.dumps(endpoints)
+    script = f'''
+import os, json, sys, asyncio
+os.environ["OPENAI_MAX_RETRIES"] = "0"
+os.environ["OPENAI_TIMEOUT"] = "25"
+sys.path.insert(0, "/app/backend")
+from ai_agents import call_claude_text, SDK_GENERATOR_PROMPT
+prompt = SDK_GENERATOR_PROMPT.replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
+eps = {repr(ep_json)}
+user_msg = f"""Generate a complete TypeScript SDK for the "{repr(project_name)}" API.\\nGateway Base URL: {repr(gateway_url)}\\nPackage: @scalableai/{repr(project_name.lower().replace(' ', '-'))}\\nEndpoints:\\n{{eps}}\\nCreate typed interfaces for all request/response objects."""
+async def run():
+    result = await call_claude_text(prompt, user_msg)
+    print(result)
+asyncio.run(run())
+'''
     try:
-        result = await asyncio.wait_for(call_claude_text(prompt, user_msg), timeout=45)
-        if result and len(result) > 100 and ("class" in result or "export" in result):
-            logger.info(f"AI generated SDK ({len(result)} chars)")
-            return result
-        else:
-            logger.warning("AI SDK response too short or invalid")
-            return None
-    except asyncio.TimeoutError:
-        logger.warning("AI SDK generation timed out (45s)")
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
+            f.write(script)
+            script_path = f.name
+
+        result = subprocess.run(
+            ["python3", script_path],
+            capture_output=True, text=True, timeout=40,
+            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+        )
+        os.unlink(script_path)
+
+        if result.returncode == 0 and result.stdout.strip():
+            sdk = result.stdout.strip()
+            if len(sdk) > 100 and ("class" in sdk or "export" in sdk):
+                logger.info(f"AI generated SDK ({len(sdk)} chars)")
+                return sdk
+        logger.warning(f"AI SDK subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("AI SDK generation timed out (40s hard kill)")
+        try:
+            os.unlink(script_path)
+        except Exception:
+            pass
         return None
     except Exception as e:
         logger.error(f"AI SDK generation failed: {e}")

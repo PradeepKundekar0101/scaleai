@@ -339,46 +339,81 @@ export default function EndpointsPage() {
     });
 
     try {
-      // Save endpoints first
+      // Step 1: Save endpoints
       await api.post(`/projects/${projectId}/endpoints`, { endpoints: selectedEndpoints });
-
       setDeploySteps(s => ({ ...s, saveEndpoints: "complete", verifyConnection: "working" }));
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 600));
 
       setDeploySteps(s => ({ ...s, verifyConnection: "complete", generateSpec: "working" }));
 
-      // Make the actual deploy call (AI generation + npm publish happens server-side)
-      const deployPromise = api.post(`/projects/${projectId}/deploy`);
+      // Step 2: Kick off deploy (returns immediately — runs in background)
+      await api.post(`/projects/${projectId}/deploy`);
 
-      // Animate steps while waiting for the deploy call
-      await new Promise(r => setTimeout(r, 3000));
-      setDeploySteps(s => ({ ...s, generateSpec: "complete", generateSdk: "working" }));
+      // Step 3: Poll for deploy progress
+      const stepOrder = ["generateSpec", "generateSdk", "createKey", "publishNpm", "activateGateway"];
+      const stepMap = { generateSpec: 0, generateSdk: 1, createKey: 2, publishNpm: 3, activateGateway: 4, complete: 5 };
 
-      await new Promise(r => setTimeout(r, 3000));
-      setDeploySteps(s => ({ ...s, generateSdk: "complete", createKey: "working" }));
+      let attempts = 0;
+      const maxAttempts = 120; // 120 * 2s = 4 minutes max
 
-      await new Promise(r => setTimeout(r, 1500));
-      setDeploySteps(s => ({ ...s, createKey: "complete", publishNpm: "working" }));
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2000));
+        attempts++;
 
-      // Wait for the actual deploy response
-      const { data } = await deployPromise;
+        try {
+          const { data: status } = await api.get(`/projects/${projectId}/deploy-status`);
 
-      setDeploySteps(s => ({ ...s, publishNpm: "complete", activateGateway: "working" }));
-      await new Promise(r => setTimeout(r, 600));
+          if (status.status === "live") {
+            // All steps complete
+            setDeploySteps({
+              saveEndpoints: "complete",
+              verifyConnection: "complete",
+              generateSpec: "complete",
+              generateSdk: "complete",
+              createKey: "complete",
+              publishNpm: "complete",
+              activateGateway: "complete",
+            });
+            setDeployResult(status);
+            await new Promise(r => setTimeout(r, 600));
+            setDeployState("success");
+            return;
+          }
 
-      setDeploySteps({
-        saveEndpoints: "complete",
-        verifyConnection: "complete",
-        generateSpec: "complete",
-        generateSdk: "complete",
-        createKey: "complete",
-        publishNpm: "complete",
-        activateGateway: "complete",
-      });
+          if (status.error) {
+            toast.error(status.error);
+            setDeployState("idle");
+            return;
+          }
 
-      setDeployResult(data);
-      await new Promise(r => setTimeout(r, 800));
-      setDeployState("success");
+          // Update step indicators based on current backend step
+          const currentStep = status.deployStep;
+          const currentIdx = stepMap[currentStep] ?? -1;
+
+          const newSteps = {
+            saveEndpoints: "complete",
+            verifyConnection: "complete",
+          };
+          for (let i = 0; i < stepOrder.length; i++) {
+            if (i < currentIdx) {
+              newSteps[stepOrder[i]] = "complete";
+            } else if (i === currentIdx) {
+              newSteps[stepOrder[i]] = "working";
+            } else {
+              newSteps[stepOrder[i]] = "pending";
+            }
+          }
+          setDeploySteps(newSteps);
+
+        } catch (pollErr) {
+          // Polling error — just retry
+          console.warn("Poll error:", pollErr);
+        }
+      }
+
+      // Timeout
+      toast.error("Deploy is taking too long. Check the dashboard for status.");
+      setDeployState("idle");
 
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Deploy failed");

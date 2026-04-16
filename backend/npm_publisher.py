@@ -224,7 +224,10 @@ MIT
         combined_output = (publish_result.stdout or "") + (publish_result.stderr or "")
 
         # npm writes notices to stderr even on success. Check for actual success indicator
-        success_published = f"+ {package_name}@" in combined_output
+        success_published = (
+            f"+ {package_name}@" in combined_output
+            or f"📦  {package_name}@{version}" in combined_output
+        )
 
         if success_published or publish_result.returncode == 0:
             actual_version = version
@@ -255,7 +258,11 @@ MIT
                 timeout=60,
             )
             combined_output2 = (publish_result.stdout or "") + (publish_result.stderr or "")
-            success_retry = f"+ {package_name}@" in combined_output2 or publish_result.returncode == 0
+            success_retry = (
+                f"+ {package_name}@" in combined_output2 
+                or publish_result.returncode == 0
+                or f"📦  {package_name}@{new_version}" in combined_output2
+            )
 
             if success_retry:
                 logger.info(f"Published {package_name}@{new_version}")

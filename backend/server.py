@@ -6,7 +6,7 @@ import os
 os.environ.setdefault("OPENAI_TIMEOUT", "30")
 os.environ.setdefault("OPENAI_MAX_RETRIES", "0")
 
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -668,10 +668,9 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
         }
 
 @api_router.post("/projects/{project_id}/deploy")
-async def deploy_project(project_id: str, request: Request, user: dict = Depends(get_current_user)):
+async def deploy_project(project_id: str, request: Request, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    """Kick off deploy as background task. Returns immediately. Frontend polls /deploy-status."""
     import hashlib
-    from ai_agents import generate_openapi_spec_ai, generate_sdk_ai
-    from npm_publisher import publish_sdk_to_npm
 
     # Verify ownership
     try:
@@ -694,7 +693,7 @@ async def deploy_project(project_id: str, request: Request, user: dict = Depends
     slug = project.get("slug", "")
     project_name = project.get("name", "Project")
 
-    # Build backend URL for gateway
+    # Build gateway URL
     app_url = os.environ.get("APP_URL", os.environ.get("FRONTEND_URL", os.environ.get("CORS_ORIGINS", "")))
     if app_url and app_url != "*":
         first_origin = app_url.split(",")[0].strip()
@@ -716,81 +715,152 @@ async def deploy_project(project_id: str, request: Request, user: dict = Depends
             "rateLimit": ep.get("rate_limit", 100),
         })
 
+    # Set project status to deploying with initial step tracking
     now = datetime.now(timezone.utc).isoformat()
-
-    # ── Step 1: Generate OpenAPI spec (AI-enhanced with programmatic fallback) ──
-    logger.info("Generating OpenAPI spec via AI...")
-    openapi_spec = await generate_openapi_spec_ai(project_name, gateway_base_url, ep_list)
-
-    if not openapi_spec:
-        logger.info("AI OpenAPI failed, using programmatic fallback")
-        openapi_spec = _build_programmatic_openapi(project_name, gateway_base_url, ep_list)
-
-    # ── Step 2: Generate TypeScript SDK (AI-enhanced with programmatic fallback) ──
-    logger.info("Generating TypeScript SDK via AI...")
-    sdk_code = await generate_sdk_ai(project_name, gateway_base_url, ep_list)
-
-    if not sdk_code:
-        logger.info("AI SDK failed, using programmatic fallback")
-        sdk_code = _build_programmatic_sdk(gateway_base_url, ep_list)
-
-    # ── Step 3: Generate API key ──
-    raw_key = f"sk_live_{secrets.token_hex(24)}"
-    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
-    key_prefix = raw_key[:16]
-    all_paths = [ep.get("path", "") for ep in endpoints]
-
-    await db.api_keys.insert_one({
-        "key_hash": key_hash,
-        "key_prefix": key_prefix,
-        "project_id": ObjectId(project_id),
-        "name": "Default Key",
-        "allowed_endpoints": all_paths,
-        "rate_limit": 100,
-        "is_active": True,
-        "created_at": now,
-    })
-
-    # ── Step 4: Publish SDK to npm ──
-    logger.info("Publishing SDK to npm...")
-    npm_org = os.environ.get("NPM_ORG", "@scalable")
-    npm_result = publish_sdk_to_npm(slug, sdk_code, project_name, gateway_base_url)
-    npm_package_name = npm_result.get("packageName", f"{npm_org}/{slug}")
-    npm_version = npm_result.get("version", "1.0.0")
-    npm_published = npm_result.get("success", False)
-
-    if npm_published:
-        logger.info(f"SDK published: {npm_package_name}@{npm_version}")
-    else:
-        logger.warning(f"npm publish failed: {npm_result.get('error', 'unknown')}")
-
-    # ── Step 5: Update project to live ──
     await db.projects.update_one(
         {"_id": ObjectId(project_id)},
         {"$set": {
-            "open_api_spec": openapi_spec,
-            "sdk_code": sdk_code,
-            "default_api_key": raw_key,
-            "npm_package_name": npm_package_name,
-            "npm_version": npm_version,
-            "npm_published": npm_published,
-            "status": "live",
+            "status": "deploying",
+            "deploy_step": "saveEndpoints",
+            "deploy_error": None,
             "updated_at": now,
         }}
     )
 
-    return {
-        "status": "live",
-        "gatewayUrl": gateway_base_url,
-        "docsUrl": f"/docs/{slug}",
-        "sdkInstall": f"npm install {npm_package_name}",
-        "npmPackage": npm_package_name,
-        "npmVersion": npm_version,
-        "npmPublished": npm_published,
-        "apiKey": raw_key,
-        "endpointsExposed": len(ep_list),
-        "fieldsFiltered": total_stripped,
-    }
+    # Run the actual deploy in background
+    background_tasks.add_task(
+        _run_deploy_background,
+        project_id, slug, project_name, gateway_base_url, ep_list, endpoints, total_stripped
+    )
+
+    return {"status": "deploying", "message": "Deploy started"}
+
+
+@api_router.get("/projects/{project_id}/deploy-status")
+async def get_deploy_status(project_id: str, user: dict = Depends(get_current_user)):
+    """Poll this endpoint to get deploy progress."""
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    status = project.get("status", "draft")
+    deploy_step = project.get("deploy_step", "")
+    deploy_error = project.get("deploy_error")
+
+    if status == "live":
+        # Deploy completed — return full result
+        return {
+            "status": "live",
+            "deployStep": "complete",
+            "gatewayUrl": project.get("gateway_url", ""),
+            "docsUrl": f"/docs/{project.get('slug', '')}",
+            "sdkInstall": f"npm install {project.get('npm_package_name', '')}",
+            "npmPackage": project.get("npm_package_name", ""),
+            "npmVersion": project.get("npm_version", ""),
+            "npmPublished": project.get("npm_published", False),
+            "apiKey": project.get("default_api_key", ""),
+            "endpointsExposed": await db.exposed_endpoints.count_documents({"project_id": ObjectId(project_id), "is_active": True}),
+            "fieldsFiltered": 0,
+        }
+    elif status == "deploying":
+        return {"status": "deploying", "deployStep": deploy_step, "error": None}
+    elif deploy_error:
+        return {"status": "failed", "deployStep": deploy_step, "error": deploy_error}
+    else:
+        return {"status": status, "deployStep": "", "error": None}
+
+
+async def _run_deploy_background(project_id, slug, project_name, gateway_base_url, ep_list, endpoints, total_stripped):
+    """Background task that runs the full deploy pipeline."""
+    import hashlib
+    from ai_agents import generate_openapi_spec_ai, generate_sdk_ai
+    from npm_publisher import publish_sdk_to_npm
+
+    pid = ObjectId(project_id)
+
+    async def update_step(step):
+        await db.projects.update_one({"_id": pid}, {"$set": {"deploy_step": step}})
+
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Step 1: Generate OpenAPI spec
+        await update_step("generateSpec")
+        logger.info("Generating OpenAPI spec via AI...")
+        openapi_spec = await generate_openapi_spec_ai(project_name, gateway_base_url, ep_list)
+        if not openapi_spec:
+            logger.info("AI OpenAPI failed, using programmatic fallback")
+            openapi_spec = _build_programmatic_openapi(project_name, gateway_base_url, ep_list)
+
+        # Step 2: Generate SDK
+        await update_step("generateSdk")
+        logger.info("Generating TypeScript SDK via AI...")
+        sdk_code = await generate_sdk_ai(project_name, gateway_base_url, ep_list)
+        if not sdk_code:
+            logger.info("AI SDK failed, using programmatic fallback")
+            sdk_code = _build_programmatic_sdk(gateway_base_url, ep_list)
+
+        # Step 3: Generate API key
+        await update_step("createKey")
+        raw_key = f"sk_live_{secrets.token_hex(24)}"
+        key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        key_prefix = raw_key[:16]
+        all_paths = [ep.get("path", "") for ep in endpoints]
+
+        await db.api_keys.insert_one({
+            "key_hash": key_hash,
+            "key_prefix": key_prefix,
+            "project_id": pid,
+            "name": "Default Key",
+            "allowed_endpoints": all_paths,
+            "rate_limit": 100,
+            "is_active": True,
+            "created_at": now,
+        })
+
+        # Step 4: Publish SDK to npm
+        await update_step("publishNpm")
+        logger.info("Publishing SDK to npm...")
+        npm_org = os.environ.get("NPM_ORG", "@scalableai")
+        npm_result = publish_sdk_to_npm(slug, sdk_code, project_name, gateway_base_url)
+        npm_package_name = npm_result.get("packageName", f"{npm_org}/{slug}")
+        npm_version = npm_result.get("version", "1.0.0")
+        npm_published = npm_result.get("success", False)
+
+        if npm_published:
+            logger.info(f"SDK published: {npm_package_name}@{npm_version}")
+        else:
+            logger.warning(f"npm publish failed: {npm_result.get('error', 'unknown')}")
+
+        # Step 5: Activate gateway — mark project as live
+        await update_step("activateGateway")
+        await db.projects.update_one(
+            {"_id": pid},
+            {"$set": {
+                "open_api_spec": openapi_spec,
+                "sdk_code": sdk_code,
+                "default_api_key": raw_key,
+                "npm_package_name": npm_package_name,
+                "npm_version": npm_version,
+                "npm_published": npm_published,
+                "gateway_url": gateway_base_url,
+                "status": "live",
+                "deploy_step": "complete",
+                "deploy_error": None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        logger.info(f"Deploy complete for {project_name} ({slug})")
+
+    except Exception as e:
+        logger.error(f"Deploy background task failed: {e}")
+        await db.projects.update_one(
+            {"_id": pid},
+            {"$set": {"deploy_error": str(e), "status": "configuring"}}
+        )
 
 
 def _build_programmatic_openapi(project_name: str, gateway_base_url: str, ep_list: list) -> dict:
