@@ -84,7 +84,7 @@ async def get_valid_token(project: dict, db) -> str:
         return cached or ""
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(
                 f"{target_url}{login_endpoint}",
                 json={"email": sa_email, "password": sa_password},
@@ -109,7 +109,7 @@ async def get_valid_token(project: dict, db) -> str:
     except Exception as e:
         logger.error(f"Gateway auth failed: {e}")
 
-    return cached or ""
+    return cached or None
 
 
 async def gateway_handler(project_slug: str, api_path: str, request, db):
@@ -233,7 +233,7 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     response_data = None
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=5.0) as client:
             body = None
             if request.method in ("POST", "PUT", "PATCH"):
                 body = await request.body()
