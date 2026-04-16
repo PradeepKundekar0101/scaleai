@@ -1,88 +1,91 @@
-# Scalable Platform — PRD
+# Scalable — Product Requirements Document
 
-## Problem Statement
-Scalable is an AI-powered platform that helps SaaS companies convert into PaaS by creating an API gateway, generating docs, and publishing SDKs. Phase 1 establishes the foundation with auth, dashboard, and project management.
+## Original Problem Statement
+Build "Scalable," an AI-powered platform that converts SaaS backends into a public API Platform/PaaS. The platform enables SaaS teams to expose selected backend routes as a public developer API — with automatic OpenAPI spec generation, SDK generation, API key management, rate limiting, and sensitive field stripping — in minutes.
+
+## Tech Stack
+- **Frontend**: React (CRA) + Tailwind CSS + Shadcn/UI
+- **Backend**: FastAPI (Python) + Motor (async MongoDB)
+- **Database**: MongoDB
+- **AI**: Claude via Emergent Universal Key (for code scanning)
+- **Auth**: JWT (access + refresh tokens, brute-force protection)
 
 ## Architecture
-- **Backend**: FastAPI (Python) on port 8001, MongoDB via Motor async driver
-- **Frontend**: React 19 + Tailwind CSS + Shadcn/UI, port 3000
-- **Database**: MongoDB (7 collections: users, projects, discovered_routes, exposed_endpoints, api_keys, rate_limits, usage_logs)
-- **Auth**: JWT-based (PyJWT), bcrypt password hashing, Bearer token + httpOnly cookies
+```
+/app
+├── backend/
+│   ├── server.py          # All API routes, auth, deploy logic
+│   ├── gateway.py         # Reverse proxy, rate limiting, field stripping
+│   ├── ai_agents.py       # Claude AI integration
+│   ├── github_service.py  # GitHub repo file fetching
+│   ├── demo_data.py       # Mock codebase fallback
+│   └── demo_scan_results.py # Mock AI scan fallback
+└── frontend/src/
+    ├── App.js             # React routes
+    ├── lib/api.js         # Axios instance
+    ├── contexts/AuthContext.js
+    ├── components/        # Sidebar, AppLayout, ProtectedRoute
+    └── pages/
+        ├── LoginPage.jsx, RegisterPage.jsx
+        ├── DashboardPage.jsx
+        ├── ConnectPage.jsx
+        ├── EndpointsPage.jsx
+        ├── KeysPage.jsx    # Phase 5
+        └── DocsPage.jsx    # Phase 5
+```
 
-## User Personas
-- **SaaS Developer**: Wants to expose internal APIs as a platform, manage API keys, and monitor usage
-- **Platform Admin**: Seeds initial data, manages overall platform config
+## Completed Phases
 
-## Core Requirements (Static)
-1. User registration/login with email+password
-2. JWT-based authentication with protected routes
-3. Project CRUD tied to authenticated user
-4. Dashboard with project cards grid and empty state
-5. Sidebar navigation (Dashboard, Connect, API Keys, Docs, Analytics, Settings)
-6. Dark theme matching Linear/Vercel/Stripe aesthetic
+### Phase 1: Foundation + Auth + Dashboard ✅
+- FARM stack setup, JWT auth (register, login, me, refresh, logout)
+- Brute-force protection, admin seeding
+- Dashboard with project listing
 
-## What's Been Implemented (Phase 1 — April 16, 2026)
-- 7 MongoDB collections with indexes (users, projects, api_keys, exposed_endpoints, discovered_routes, rate_limits, usage_logs)
-- Auth system: register, login, logout, refresh, /me endpoint
-- Brute force protection (5 attempts = 15 min lockout)
-- Admin seeding on startup
-- Project CRUD (create with auto-slug, list by user, get by ID with ownership check)
-- 10 stub routes returning 501 for future phases
-- FastAPI Swagger docs at /api/docs
-- Login + Register pages (split-screen layout with abstract background)
-- Dashboard with empty state, project cards grid, new project modal
-- Persistent 256px sidebar with nav items and user section
-- Protected routes with auth context
-- GitHub OAuth button (UI only, shows "coming soon" toast)
+### Phase 2: Connect + AI Scan ✅
+- GitHub file fetcher with demo_data.py mock fallback
+- Claude AI code analysis and security auditing
+- Route discovery with risk assessment (green/yellow/red)
 
-## What's Been Implemented (Phase 3 — April 16, 2026)
-- POST /api/projects/:id/endpoints — saves selected endpoints to exposed_endpoints collection
-- POST /api/projects/:id/test-connection — tests backend connection with mock fallback for unreachable servers
-- Enhanced GET /api/projects/:id — includes routeBreakdown, discoveredRouteCount, exposedEndpointCount, connectionTested
-- Endpoints configuration page (/endpoints/:projectId) — polished table with:
-  - Green rows: selectable with green left border
-  - Yellow rows: expandable showing fields to strip with strikethrough
-  - Red rows: disabled with lock icon, reduced opacity
-  - Method badges (GET=green, POST=blue, PUT=yellow, DELETE=red, PATCH=purple)
-  - Editable rate limit inputs per endpoint
-  - Risk dot tooltips showing riskReason
-- "Select All Safe" button auto-selects all green routes
-- Auth configuration section: backend URL, login endpoint (pre-filled), service account credentials
-- Test Connection with success/failure UI and mock mode indicator
-- Deploy button with smart enabled/disabled state (requires endpoints + connection)
-- Dashboard project cards navigate to /endpoints for "configuring" status projects
+### Phase 3: Endpoint Selection + Auth Config ✅
+- Endpoint table with risk coloring, selection, rate limit config
+- Auth config panel (backend URL, login endpoint, service account)
+- Connection testing with mock fallback
 
-## Prioritized Backlog
-## What's Been Implemented (Phase 4 — April 16, 2026)
-- API Gateway reverse proxy at /api/gateway/{slug}/{path}:
-  - 11-step flow: resolve slug, validate API key, check endpoint exposure, rate limit, get auth token, forward request, filter response, log usage, set headers
-  - 401 missing key, 403 invalid key, 404 endpoint not found, 429 rate limited, 502 backend unreachable
-  - X-RateLimit-Limit/Remaining/Reset headers, X-Powered-By: Scalable
-  - Sensitive field stripping with recursive deep filter
-- Deploy endpoint (POST /api/projects/:id/deploy):
-  - Generates OpenAPI 3.0 spec (programmatic with optional AI enhancement)
-  - Generates TypeScript SDK with typed ScalableClient class
-  - Creates API key (sk_live_...) with SHA-256 hash
-  - Sets project status to "live"
-- Public OpenAPI spec endpoint (GET /api/projects/{slug}/spec)
-- Deploy progress overlay with 6 animated steps
-- Deploy success screen with gateway URL, docs URL, SDK install, API key + copy buttons
-- Dashboard shows "Live" badge with gateway URL for deployed projects
+### Phase 4: API Gateway + Deploy Flow ✅
+- Reverse proxy at `/api/gateway/{slug}/{path}`
+- API key validation, rate limiting, response field stripping
+- Programmatic OpenAPI spec and SDK generation (fast, no AI timeout)
+- Deploy animation overlay + success screen
+- API Keys backend CRUD
 
-### P0 (Phase 5)
-- API docs viewer page (/docs/{slug}) - render OpenAPI spec
-- API keys management page (/keys) - CRUD operations
-- Analytics dashboard (/analytics) - usage logs visualization
+### Phase 5: API Keys UI + Docs Page ✅ (Apr 16, 2026)
+- **API Keys Management Page** (`/keys/:projectId`): Full table with prefix, status, created date, rate limit. Create modal with raw key display + copy + warning. Revoke confirmation modal with status change.
+- **Public Docs Viewer** (`/docs/:slug`): No auth required. Top bar, left TOC panel, endpoint cards with method badges, curl examples, copy buttons, "Try It" feature, sensitive field notices. TOC groups by resource with scroll-to navigation.
+- Backend `GET /api/projects/{slug}/docs-config` public endpoint
+- Deploy stores `defaultApiKey` for docs "Try It" feature
 
-### P2 (Phase 4)
-- SDK code generation
-- Custom domain support
-- GitHub OAuth full integration
-- Settings page (profile, billing)
+## DB Collections
+- `users`: email, passwordHash, name, githubId
+- `projects`: userId, name, slug, repoUrl, targetBackendUrl, credentials, openApiSpec, sdkCode, defaultApiKey, status
+- `discovered_routes`: projectId, method, path, description, risk, fieldsToStrip, rateLimit
+- `exposed_endpoints`: projectId, method, path, isActive, rateLimit, fieldsToStrip
+- `api_keys`: keyHash, keyPrefix, projectId, name, isActive, rateLimit
+- `usage_logs`: keyHash, projectSlug, endpoint, method, statusCode, latencyMs, timestamp
+- `rate_limits`: TTL-indexed rate counter per key per minute
 
-## Next Tasks
-1. Implement repo scanning (POST /projects/:id/scan)
-2. Route discovery and risk assessment
-3. Endpoint configuration UI
-4. API key CRUD
-5. Analytics with usage logs
+## Remaining Tasks (Prioritized)
+
+### P1 — Analytics Dashboard
+- Build `/analytics/:projectId` UI showing gateway usage stats
+- Charts: requests over time, status code distribution, latency
+- Data source: `usage_logs` collection
+
+### P2 — GitHub OAuth
+- Wire up "Continue with GitHub" button (currently stubbed)
+
+### P2 — AI-Enhanced Generation
+- Move Claude-powered OpenAPI/SDK generation to background tasks
+- Bypass 60s HTTP timeout via async processing
+
+### Refactoring
+- Break `server.py` (900+ lines) into `routers/` using APIRouter
