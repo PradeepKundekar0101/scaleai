@@ -281,47 +281,24 @@ Return ONLY Markdown. No code blocks around the entire response, just the markdo
 
 
 async def generate_openapi_spec_ai(project_name: str, gateway_url: str, endpoints: list) -> dict:
-    """Generate OpenAPI 3.0 spec using Claude AI in a subprocess with hard timeout."""
-    import subprocess
-    import tempfile
+    """Generate OpenAPI 3.0 spec using Claude AI with hard timeout."""
     ep_json = json.dumps(endpoints)
-    script = f'''
-import os, json, sys, asyncio
-sys.path.insert(0, "/app/backend")
-from ai_agents import call_claude, OPENAPI_SCHEMA_DESIGNER_PROMPT
-prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{{projectName}}", {repr(project_name)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
-eps = {repr(ep_json)}
-user_msg = f"""Generate a complete OpenAPI 3.0 specification for the "{repr(project_name)}" API.\\nGateway Base URL: {repr(gateway_url)}\\nEndpoints:\\n{{eps}}\\nRemember: Fields listed in fieldsToStrip are REMOVED from responses automatically."""
-async def run():
-    result = await call_claude(prompt, user_msg)
-    print(json.dumps(result))
-asyncio.run(run())
-'''
+    prompt = OPENAPI_SCHEMA_DESIGNER_PROMPT.replace("{projectName}", project_name).replace("{gatewayBaseUrl}", gateway_url)
+    user_msg = (
+        f'Generate a complete OpenAPI 3.0 specification for the "{project_name}" API.\n'
+        f"Gateway Base URL: {gateway_url}\n"
+        f"Endpoints:\n{ep_json}\n"
+        f"Remember: Fields listed in fieldsToStrip are REMOVED from responses automatically."
+    )
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
-            f.write(script)
-            script_path = f.name
-
-        result = subprocess.run(
-            ["python3", script_path],
-            capture_output=True, text=True, timeout=40,
-            env={**os.environ}
-        )
-        os.unlink(script_path)
-
-        if result.returncode == 0 and result.stdout.strip():
-            spec = json.loads(result.stdout.strip())
-            if "openapi" in spec and "paths" in spec:
-                logger.info(f"AI generated OpenAPI spec with {len(spec.get('paths', {}))} paths")
-                return spec
-        logger.warning(f"AI OpenAPI subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        spec = await asyncio.wait_for(call_claude(prompt, user_msg), timeout=40)
+        if "openapi" in spec and "paths" in spec:
+            logger.info(f"AI generated OpenAPI spec with {len(spec.get('paths', {}))} paths")
+            return spec
+        logger.warning("AI OpenAPI response missing required keys")
         return None
-    except subprocess.TimeoutExpired:
-        logger.warning("AI OpenAPI generation timed out (40s hard kill)")
-        try:
-            os.unlink(script_path)
-        except Exception:
-            pass
+    except asyncio.TimeoutError:
+        logger.warning("AI OpenAPI generation timed out (40s)")
         return None
     except Exception as e:
         logger.error(f"AI OpenAPI generation failed: {e}")
@@ -329,47 +306,27 @@ asyncio.run(run())
 
 
 async def generate_sdk_ai(project_name: str, gateway_url: str, endpoints: list) -> str:
-    """Generate TypeScript SDK using Claude AI in a subprocess with hard timeout."""
-    import subprocess
-    import tempfile
+    """Generate TypeScript SDK using Claude AI with hard timeout."""
     ep_json = json.dumps(endpoints)
-    script = f'''
-import os, json, sys, asyncio
-sys.path.insert(0, "/app/backend")
-from ai_agents import call_claude_text, SDK_GENERATOR_PROMPT
-prompt = SDK_GENERATOR_PROMPT.replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
-eps = {repr(ep_json)}
-user_msg = f"""Generate a complete TypeScript SDK for the "{repr(project_name)}" API.\\nGateway Base URL: {repr(gateway_url)}\\nPackage: @scalableai/{repr(project_name.lower().replace(' ', '-'))}\\nEndpoints:\\n{{eps}}\\nCreate typed interfaces for all request/response objects."""
-async def run():
-    result = await call_claude_text(prompt, user_msg)
-    print(result)
-asyncio.run(run())
-'''
+    prompt = SDK_GENERATOR_PROMPT.replace("{gatewayBaseUrl}", gateway_url)
+    slug = project_name.lower().replace(' ', '-')
+    user_msg = (
+        f'Generate a complete TypeScript SDK for the "{project_name}" API.\n'
+        f"Gateway Base URL: {gateway_url}\n"
+        f"Package: @scalableai/{slug}\n"
+        f"Endpoints:\n{ep_json}\n"
+        f"Create typed interfaces for all request/response objects."
+    )
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
-            f.write(script)
-            script_path = f.name
-
-        result = subprocess.run(
-            ["python3", script_path],
-            capture_output=True, text=True, timeout=40,
-            env={**os.environ}
-        )
-        os.unlink(script_path)
-
-        if result.returncode == 0 and result.stdout.strip():
-            sdk = result.stdout.strip()
-            if len(sdk) > 100 and ("class" in sdk or "export" in sdk):
-                logger.info(f"AI generated SDK ({len(sdk)} chars)")
-                return sdk
-        logger.warning(f"AI SDK subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        sdk = await asyncio.wait_for(call_claude_text(prompt, user_msg), timeout=40)
+        sdk = sdk.strip()
+        if len(sdk) > 100 and ("class" in sdk or "export" in sdk):
+            logger.info(f"AI generated SDK ({len(sdk)} chars)")
+            return sdk
+        logger.warning("AI SDK response too short or missing expected keywords")
         return None
-    except subprocess.TimeoutExpired:
-        logger.warning("AI SDK generation timed out (40s hard kill)")
-        try:
-            os.unlink(script_path)
-        except Exception:
-            pass
+    except asyncio.TimeoutError:
+        logger.warning("AI SDK generation timed out (40s)")
         return None
     except Exception as e:
         logger.error(f"AI SDK generation failed: {e}")
@@ -378,47 +335,26 @@ asyncio.run(run())
 
 
 async def generate_sdk_docs_ai(project_name: str, project_slug: str, gateway_url: str, endpoints: list) -> str:
-    """Generate SDK usage documentation using Claude AI in a subprocess with hard timeout."""
-    import subprocess
-    import tempfile
+    """Generate SDK usage documentation using Claude AI with hard timeout."""
     ep_json = json.dumps(endpoints)
-    script = f'''
-import os, json, sys, asyncio
-sys.path.insert(0, "/app/backend")
-from ai_agents import call_claude_text, SDK_DOCS_GENERATOR_PROMPT
-prompt = SDK_DOCS_GENERATOR_PROMPT.replace("{{projectSlug}}", {repr(project_slug)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
-eps = {repr(ep_json)}
-user_msg = f"""Generate comprehensive SDK usage documentation for the "{repr(project_name)}" API.\\nPackage: @scalableai/{repr(project_slug)}\\nGateway URL: {repr(gateway_url)}\\nEndpoints:\\n{{eps}}\\nProvide clear installation instructions, authentication setup, and usage examples for all endpoint groups."""
-async def run():
-    result = await call_claude_text(prompt, user_msg)
-    print(result)
-asyncio.run(run())
-'''
+    prompt = SDK_DOCS_GENERATOR_PROMPT.replace("{projectSlug}", project_slug).replace("{gatewayBaseUrl}", gateway_url)
+    user_msg = (
+        f'Generate comprehensive SDK usage documentation for the "{project_name}" API.\n'
+        f"Package: @scalableai/{project_slug}\n"
+        f"Gateway URL: {gateway_url}\n"
+        f"Endpoints:\n{ep_json}\n"
+        f"Provide clear installation instructions, authentication setup, and usage examples for all endpoint groups."
+    )
     try:
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
-            f.write(script)
-            script_path = f.name
-
-        result = subprocess.run(
-            ["python3", script_path],
-            capture_output=True, text=True, timeout=40,
-            env={**os.environ}
-        )
-        os.unlink(script_path)
-
-        if result.returncode == 0 and result.stdout.strip():
-            docs = result.stdout.strip()
-            if len(docs) > 100 and ("##" in docs or "npm install" in docs):
-                logger.info(f"AI generated SDK docs ({len(docs)} chars)")
-                return docs
-        logger.warning(f"AI SDK docs subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        docs = await asyncio.wait_for(call_claude_text(prompt, user_msg), timeout=40)
+        docs = docs.strip()
+        if len(docs) > 100 and ("##" in docs or "npm install" in docs):
+            logger.info(f"AI generated SDK docs ({len(docs)} chars)")
+            return docs
+        logger.warning("AI SDK docs response too short or missing expected keywords")
         return None
-    except subprocess.TimeoutExpired:
-        logger.warning("AI SDK docs generation timed out (40s hard kill)")
-        try:
-            os.unlink(script_path)
-        except Exception:
-            pass
+    except asyncio.TimeoutError:
+        logger.warning("AI SDK docs generation timed out (40s)")
         return None
     except Exception as e:
         logger.error(f"AI SDK docs generation failed: {e}")
