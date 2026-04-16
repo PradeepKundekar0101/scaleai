@@ -1,6 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;540;600;700&display=swap');
+/* Waldenburg Font Faces */
+@font-face {
+  font-family: 'Waldenburg';
+  src: url('./assets/fonts/KMRWaldenburg-Book.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Waldenburg';
+  src: url('./assets/fonts/KMRWaldenburg-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Waldenburg';
+  src: url('./assets/fonts/KMRWaldenburg-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Waldenburg';
+  src: url('./assets/fonts/KMRWaldenburg-Heavy.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
+  /* Light mode colors */
   --mysteria: #1b1938;
   --lavender: #cbb7fb;
   --charcoal: #292827;
@@ -8,7 +40,39 @@
   --parchment: #dcd7d3;
   --amethyst: #714cb6;
   --white: #ffffff;
-  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Semantic tokens - Light */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f3f0;
+  --bg-tertiary: #e9e5dd;
+  --text-primary: #292827;
+  --text-secondary: #585756;
+  --text-tertiary: #8a8987;
+  --border-primary: #dcd7d3;
+  --border-secondary: #e9e5dd;
+  --accent-primary: #714cb6;
+  --accent-hover: #5c3d99;
+  
+  /* Border radius - More rounded */
+  --radius: 20px;
+  --radius-lg: 24px;
+  --radius-xl: 28px;
+  
+  --font: 'Waldenburg', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.dark {
+  /* Dark mode colors */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #242424;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-tertiary: #737373;
+  --border-primary: #2a2a2a;
+  --border-secondary: #3a3a3a;
+  --accent-primary: #9b7fd4;
+  --accent-hover: #b399e0;
 }
 
 * {
@@ -23,31 +87,32 @@ html {
 
 body {
   font-family: var(--font);
-  font-weight: 460;
-  color: var(--charcoal);
-  background: var(--white);
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.50;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--parchment); border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #bbb5b0; }
+::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 16px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-secondary); }
 
 /* Code blocks */
 pre, code {
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
 }
 
-/* Toaster overrides for light theme */
+/* Toaster overrides */
 [data-sonner-toaster] [data-sonner-toast] {
-  background: var(--white) !important;
-  border: 1px solid var(--parchment) !important;
-  color: var(--charcoal) !important;
-  border-radius: 8px !important;
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-primary) !important;
+  color: var(--text-primary) !important;
+  border-radius: 16px !important;
 }
 
 /* Animations */
@@ -70,8 +135,14 @@ pre, code {
 .animate-pulse-subtle { animation: pulse-subtle 2s ease-in-out infinite; }
 
 .skeleton {
-  background: linear-gradient(90deg, #f0eeeb 25%, #e5e2de 50%, #f0eeeb 75%);
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
+
+/* Override Tailwind rounded classes for more roundedness */
+.rounded-lg { border-radius: var(--radius) !important; }
+.rounded-xl { border-radius: var(--radius-lg) !important; }
+.rounded-2xl { border-radius: var(--radius-xl) !important; }
+.rounded-3xl { border-radius: 32px !important; }

@@ -2,7 +2,7 @@ import Sidebar from "@/components/Sidebar";
 
 export default function AppLayout({ children }) {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-[var(--bg-primary)] transition-colors duration-200">
       <Sidebar />
       <main className="ml-64 min-h-screen" data-testid="main-content">
         <div className="max-w-6xl mx-auto px-10 py-10">

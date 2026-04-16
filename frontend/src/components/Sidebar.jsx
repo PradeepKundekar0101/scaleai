@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   LayoutGrid,
   Link2,
@@ -8,6 +9,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Moon,
+  Sun,
 } from "lucide-react";
 
 const navItems = [
@@ -22,21 +25,22 @@ const navItems = [
 export default function Sidebar() {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const initial = user?.name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "U";
 
   return (
     <aside
-      className="fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-[#dcd7d3] flex flex-col z-40"
+      className="fixed left-0 top-0 bottom-0 w-64 bg-[var(--bg-primary)] border-r border-[var(--border-primary)] flex flex-col z-40 transition-colors duration-200"
       data-testid="sidebar"
     >
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-[#dcd7d3]">
+      <div className="h-16 flex items-center px-6 border-b border-[var(--border-primary)]">
         <Link to="/" className="flex items-center gap-2.5" data-testid="sidebar-logo">
-          <div className="w-7 h-7 bg-[#1b1938] rounded-lg flex items-center justify-center">
+          <div className="w-7 h-7 bg-[var(--mysteria)] rounded-xl flex items-center justify-center">
             <span className="text-white text-xs font-bold">S</span>
           </div>
-          <span className="text-[#292827] font-semibold text-lg tracking-tight">Scalable</span>
+          <span className="text-[var(--text-primary)] font-semibold text-lg tracking-tight">Scalable</span>
         </Link>
       </div>
 
@@ -49,10 +53,10 @@ export default function Sidebar() {
               key={item.path}
               to={item.path}
               data-testid={`sidebar-nav-${item.label.toLowerCase()}`}
-              className={`flex items-center gap-3 h-10 px-3 text-sm transition-all duration-150 rounded-lg
+              className={`flex items-center gap-3 h-10 px-3 text-sm transition-all duration-150 rounded-2xl
                 ${isActive
-                  ? "bg-[#cbb7fb]/15 text-[#714cb6] font-medium"
-                  : "text-[#292827]/60 hover:bg-[#f5f3f0] hover:text-[#292827]"
+                  ? "bg-[var(--accent-primary)]/15 text-[var(--accent-primary)] font-medium"
+                  : "text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
                 }`}
             >
               <item.icon className="w-[18px] h-[18px] shrink-0" strokeWidth={1.5} />
@@ -62,20 +66,41 @@ export default function Sidebar() {
         })}
       </nav>
 
+      {/* Theme Toggle */}
+      <div className="px-3 pb-3">
+        <button
+          onClick={toggleTheme}
+          className="w-full flex items-center gap-3 h-10 px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] rounded-2xl transition-all duration-150"
+          title={theme === "light" ? "Switch to Dark Mode" : "Switch to Light Mode"}
+        >
+          {theme === "light" ? (
+            <>
+              <Moon className="w-[18px] h-[18px] shrink-0" strokeWidth={1.5} />
+              <span>Dark Mode</span>
+            </>
+          ) : (
+            <>
+              <Sun className="w-[18px] h-[18px] shrink-0" strokeWidth={1.5} />
+              <span>Light Mode</span>
+            </>
+          )}
+        </button>
+      </div>
+
       {/* User section */}
-      <div className="border-t border-[#dcd7d3] p-3" data-testid="sidebar-user">
+      <div className="border-t border-[var(--border-primary)] p-3" data-testid="sidebar-user">
         <div className="flex items-center gap-3 px-2">
-          <div className="w-8 h-8 rounded-lg bg-[#1b1938] flex items-center justify-center text-xs font-semibold text-white">
+          <div className="w-8 h-8 rounded-xl bg-[var(--mysteria)] flex items-center justify-center text-xs font-semibold text-white">
             {initial}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-[#292827] font-medium truncate">{user?.name || "User"}</p>
-            <p className="text-xs text-[#292827]/50 truncate">{user?.email}</p>
+            <p className="text-sm text-[var(--text-primary)] font-medium truncate">{user?.name || "User"}</p>
+            <p className="text-xs text-[var(--text-tertiary)] truncate">{user?.email}</p>
           </div>
           <button
             onClick={logout}
             data-testid="sidebar-logout-btn"
-            className="p-1.5 text-[#292827]/40 hover:text-[#292827] hover:bg-[#f5f3f0] rounded-lg transition-colors"
+            className="p-1.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] rounded-xl transition-colors"
             title="Logout"
           >
             <LogOut className="w-4 h-4" strokeWidth={1.5} />
