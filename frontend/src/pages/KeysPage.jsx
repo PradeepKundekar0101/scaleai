@@ -126,23 +126,23 @@ export default function KeysPage() {
     return (
       <AppLayout>
         <div data-testid="keys-loading" className="pb-12">
-          <div className="h-4 w-20 bg-[#18181B] rounded-sm animate-pulse mb-4" />
+          <div className="h-4 w-20 skeleton mb-4" />
           <div className="flex items-start justify-between mb-8">
             <div className="space-y-2">
-              <div className="h-7 w-32 bg-[#18181B] rounded-sm animate-pulse" />
-              <div className="h-4 w-24 bg-[#18181B] rounded-sm animate-pulse" />
+              <div className="h-7 w-32 skeleton" />
+              <div className="h-4 w-24 skeleton" />
             </div>
-            <div className="h-9 w-36 bg-[#18181B] rounded-sm animate-pulse" />
+            <div className="h-9 w-36 skeleton" />
           </div>
-          <div className="bg-[#0F0F12] border border-[#27272A] rounded-sm overflow-hidden">
-            <div className="bg-[#18181B] h-10 border-b border-[#27272A]" />
+          <div className="bg-white border border-[#dcd7d3] rounded-2xl overflow-hidden">
+            <div className="bg-[#f5f3f0] h-10 border-b border-[#dcd7d3]" />
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center gap-6 px-4 py-4 border-b border-[#27272A]">
-                <div className="h-4 w-28 bg-[#18181B] rounded-sm animate-pulse" />
-                <div className="h-4 w-32 bg-[#18181B] rounded-sm animate-pulse" />
-                <div className="h-4 w-16 bg-[#18181B] rounded-sm animate-pulse" />
-                <div className="h-4 w-24 bg-[#18181B] rounded-sm animate-pulse" />
-                <div className="h-4 w-16 bg-[#18181B] rounded-sm animate-pulse" />
+              <div key={i} className="flex items-center gap-6 px-4 py-4 border-b border-[#dcd7d3]">
+                <div className="h-4 w-28 skeleton" />
+                <div className="h-4 w-32 skeleton" />
+                <div className="h-4 w-16 skeleton" />
+                <div className="h-4 w-24 skeleton" />
+                <div className="h-4 w-16 skeleton" />
               </div>
             ))}
           </div>
@@ -158,7 +158,7 @@ export default function KeysPage() {
         <button
           onClick={() => navigate(`/endpoints/${projectId}`)}
           data-testid="keys-back-btn"
-          className="flex items-center gap-1.5 text-xs text-[#71717A] hover:text-[#FAFAFA] transition-colors mb-4"
+          className="flex items-center gap-1.5 text-xs text-[#292827]/50 hover:text-[#292827] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to project
         </button>
@@ -167,20 +167,20 @@ export default function KeysPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1
-              className="text-[#FAFAFA] text-2xl font-semibold tracking-tight"
+              className="text-[#292827] text-3xl font-semibold tracking-tight leading-[0.96]"
               data-testid="keys-title"
             >
               API Keys
             </h1>
-            <p className="text-[#71717A] text-sm mt-1">{project?.name}</p>
-            <p className="text-[#3F3F46] text-xs mt-0.5">
+            <p className="text-[#292827]/50 text-sm mt-1.5">{project?.name}</p>
+            <p className="text-[#292827]/30 text-xs mt-0.5">
               Manage access to your public API.
             </p>
           </div>
           <Button
             onClick={() => setShowCreate(true)}
             data-testid="create-key-btn"
-            className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm h-9 px-4"
+            className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg text-sm font-semibold h-10 px-5"
           >
             <Plus className="w-4 h-4 mr-1.5" />
             Create New Key
@@ -190,49 +190,49 @@ export default function KeysPage() {
         {/* Keys Table or Empty State */}
         {keys.length === 0 ? (
           <div
-            className="bg-[#0F0F12] border border-[#27272A] rounded-sm flex flex-col items-center justify-center py-20"
+            className="bg-white border border-[#dcd7d3] rounded-2xl flex flex-col items-center justify-center py-20 shadow-sm"
             data-testid="keys-empty-state"
           >
-            <Key className="w-10 h-10 text-[#3F3F46] mb-4" strokeWidth={1.5} />
-            <h3 className="text-[#FAFAFA] font-medium text-base mb-1">
+            <Key className="w-10 h-10 text-[#292827]/20 mb-4" strokeWidth={1.5} />
+            <h3 className="text-[#292827] font-semibold text-lg mb-1">
               No API keys yet
             </h3>
-            <p className="text-[#71717A] text-sm mb-5">
+            <p className="text-[#292827]/50 text-sm mb-5">
               Create your first API key to start using the API
             </p>
             <Button
               onClick={() => setShowCreate(true)}
               data-testid="create-key-empty-btn"
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm h-9 px-5"
+              className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg text-sm font-semibold h-10 px-5"
             >
               Create Key
             </Button>
           </div>
         ) : (
           <div
-            className="bg-[#0F0F12] border border-[#27272A] rounded-sm overflow-hidden"
+            className="bg-white border border-[#dcd7d3] rounded-2xl overflow-hidden shadow-sm"
             data-testid="keys-table"
           >
             <div className="overflow-x-auto">
             <table className="w-full min-w-[640px]">
               <thead>
-                <tr className="bg-[#18181B] border-b border-[#27272A]">
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                <tr className="bg-[#f5f3f0] border-b border-[#dcd7d3]">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Key Name
                   </th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Key
                   </th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Created
                   </th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Rate Limit
                   </th>
-                  <th className="px-4 py-3 text-right text-[10px] font-semibold tracking-wider uppercase text-[#71717A]">
+                  <th className="px-4 py-3 text-right text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">
                     Actions
                   </th>
                 </tr>
@@ -242,15 +242,15 @@ export default function KeysPage() {
                   <tr
                     key={k.id}
                     data-testid={`key-row-${k.id}`}
-                    className={`border-b border-[#27272A] transition-colors ${
+                    className={`border-b border-[#dcd7d3] transition-colors ${
                       k.isActive ? "" : "opacity-50"
                     }`}
                   >
                     <td className="px-4 py-3">
-                      <span className="text-sm text-[#FAFAFA]">{k.name}</span>
+                      <span className="text-sm text-[#292827] font-medium">{k.name}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <code className="font-mono text-xs text-[#A1A1AA]">
+                      <code className="font-mono text-xs text-[#292827]/60">
                         {k.keyPrefix}...
                       </code>
                     </td>
@@ -258,23 +258,23 @@ export default function KeysPage() {
                       <span className="inline-flex items-center gap-1.5 text-xs">
                         <span
                           className={`w-2 h-2 rounded-full ${
-                            k.isActive ? "bg-[#22C55E]" : "bg-[#71717A]"
+                            k.isActive ? "bg-emerald-600" : "bg-[#292827]/30"
                           }`}
                         />
                         {k.isActive ? (
-                          <span className="text-[#22C55E]">Active</span>
+                          <span className="text-emerald-700 font-medium">Active</span>
                         ) : (
-                          <span className="text-[#71717A]">Revoked</span>
+                          <span className="text-[#292827]/40">Revoked</span>
                         )}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-[#71717A]">
+                      <span className="text-xs text-[#292827]/50">
                         {formatDate(k.createdAt)}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs text-[#A1A1AA] font-mono">
+                      <span className="text-xs text-[#292827]/50 font-mono">
                         {k.isActive ? `${k.rateLimit}/min` : "—"}
                       </span>
                     </td>
@@ -283,7 +283,7 @@ export default function KeysPage() {
                         <button
                           onClick={() => setRevokeTarget(k)}
                           data-testid={`revoke-key-${k.id}`}
-                          className="text-xs text-red-400 hover:text-red-300 transition-colors font-medium"
+                          className="text-xs text-red-600 hover:text-red-700 transition-colors font-medium"
                         >
                           Revoke
                         </button>
@@ -301,14 +301,14 @@ export default function KeysPage() {
       {/* Create Key Modal */}
       <Dialog open={showCreate} onOpenChange={(open) => { if (!open) closeCreateModal(); }}>
         <DialogContent
-          className="bg-[#0F0F12] border-[#27272A] text-[#FAFAFA] sm:max-w-md"
+          className="bg-white border-[#dcd7d3] text-[#292827] sm:max-w-md rounded-2xl"
           data-testid="create-key-modal"
         >
           {!createdKey ? (
             <>
               <DialogHeader>
-                <DialogTitle className="text-[#FAFAFA]">Create New API Key</DialogTitle>
-                <DialogDescription className="text-[#71717A]">
+                <DialogTitle className="text-[#292827] text-xl font-semibold">Create New API Key</DialogTitle>
+                <DialogDescription className="text-[#292827]/50 text-sm">
                   Give your key a descriptive name so you can identify it later.
                 </DialogDescription>
               </DialogHeader>
@@ -318,7 +318,7 @@ export default function KeysPage() {
                   onChange={(e) => setNewKeyName(e.target.value)}
                   placeholder="e.g., Production Key, Partner - Acme Corp"
                   data-testid="key-name-input"
-                  className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10 text-sm"
+                  className="bg-white border-[#dcd7d3] text-[#292827] placeholder:text-[#292827]/30 focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 rounded-lg h-11 text-sm"
                   onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
                   autoFocus
                 />
@@ -327,7 +327,7 @@ export default function KeysPage() {
                 <Button
                   variant="outline"
                   onClick={closeCreateModal}
-                  className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] rounded-sm"
+                  className="border-[#dcd7d3] text-[#292827]/60 hover:bg-[#f5f3f0] hover:text-[#292827] rounded-lg"
                 >
                   Cancel
                 </Button>
@@ -335,7 +335,7 @@ export default function KeysPage() {
                   onClick={handleCreate}
                   disabled={creating || !newKeyName.trim()}
                   data-testid="confirm-create-key-btn"
-                  className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm"
+                  className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg font-semibold"
                 >
                   {creating && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
                   Create Key
@@ -345,29 +345,29 @@ export default function KeysPage() {
           ) : (
             <>
               <DialogHeader>
-                <DialogTitle className="text-[#FAFAFA]">API Key Created</DialogTitle>
+                <DialogTitle className="text-[#292827] text-xl font-semibold">API Key Created</DialogTitle>
               </DialogHeader>
               <div className="py-4 space-y-4">
                 <div
-                  className="bg-[#18181B] border border-[#27272A] rounded-sm px-4 py-3 flex items-center gap-3"
+                  className="bg-[#f5f3f0] border border-[#dcd7d3] rounded-lg px-4 py-3 flex items-center gap-3"
                   data-testid="created-key-display"
                 >
-                  <code className="font-mono text-xs text-[#FAFAFA] flex-1 break-all select-all">
+                  <code className="font-mono text-xs text-[#292827] flex-1 break-all select-all">
                     {createdKey}
                   </code>
                   <button
                     onClick={copyKey}
                     data-testid="copy-created-key-btn"
-                    className="p-1.5 text-[#71717A] hover:text-[#FAFAFA] transition-colors shrink-0"
+                    className="p-1.5 text-[#292827]/40 hover:text-[#292827] transition-colors shrink-0"
                   >
                     {copied ? (
-                      <Check className="w-4 h-4 text-emerald-400" />
+                      <Check className="w-4 h-4 text-emerald-600" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-[#EAB308] flex items-center gap-1.5" data-testid="key-warning">
+                <p className="text-xs text-amber-600 flex items-center gap-1.5" data-testid="key-warning">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   Copy this key now. You won't see it again.
                 </p>
@@ -376,7 +376,7 @@ export default function KeysPage() {
                 <Button
                   onClick={closeCreateModal}
                   data-testid="done-create-key-btn"
-                  className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm w-full"
+                  className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg font-semibold w-full"
                 >
                   Done
                 </Button>
@@ -389,16 +389,16 @@ export default function KeysPage() {
       {/* Revoke Confirmation Modal */}
       <Dialog open={!!revokeTarget} onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}>
         <DialogContent
-          className="bg-[#0F0F12] border-[#27272A] text-[#FAFAFA] sm:max-w-sm"
+          className="bg-white border-[#dcd7d3] text-[#292827] sm:max-w-sm rounded-2xl"
           data-testid="revoke-key-modal"
         >
           <DialogHeader>
-            <DialogTitle className="text-[#FAFAFA] flex items-center gap-2">
-              <ShieldOff className="w-5 h-5 text-red-400" />
+            <DialogTitle className="text-[#292827] flex items-center gap-2 text-xl font-semibold">
+              <ShieldOff className="w-5 h-5 text-red-600" />
               Revoke API Key
             </DialogTitle>
-            <DialogDescription className="text-[#A1A1AA]">
-              Revoke <strong className="text-[#FAFAFA]">{revokeTarget?.name}</strong>?
+            <DialogDescription className="text-[#292827]/60 text-sm">
+              Revoke <strong className="text-[#292827]">{revokeTarget?.name}</strong>?
               API consumers using it will immediately lose access.
             </DialogDescription>
           </DialogHeader>
@@ -406,7 +406,7 @@ export default function KeysPage() {
             <Button
               variant="outline"
               onClick={() => setRevokeTarget(null)}
-              className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] rounded-sm"
+              className="border-[#dcd7d3] text-[#292827]/60 hover:bg-[#f5f3f0] hover:text-[#292827] rounded-lg"
             >
               Cancel
             </Button>
@@ -414,7 +414,7 @@ export default function KeysPage() {
               onClick={handleRevoke}
               disabled={revoking}
               data-testid="confirm-revoke-key-btn"
-              className="bg-red-600 hover:bg-red-700 text-white rounded-sm"
+              className="bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold"
             >
               {revoking && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
               Revoke
