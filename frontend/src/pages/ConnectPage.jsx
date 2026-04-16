@@ -5,70 +5,63 @@ import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, CheckCircle2, Loader2, Circle, ArrowRight, Brain, Zap } from "lucide-react";
+import { Search, CheckCircle2, Loader2, Circle, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
+
+function TypewriterText({ text, speed = 20 }) {
+  const [displayedText, setDisplayedText] = useState("");
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedText(prev => prev + text[currentIndex]);
+        setCurrentIndex(prev => prev + 1);
+      }, speed);
+      return () => clearTimeout(timeout);
+    }
+  }, [currentIndex, text, speed]);
+
+  return <span>{displayedText}</span>;
+}
 
 function ReActMessage({ type, message, isLatest }) {
   return (
-    <div 
-      className={`flex items-start gap-2.5 py-2 px-3 rounded-lg transition-all duration-300 ${
-        isLatest ? 'animate-fade-in' : ''
-      } ${type === 'reason' ? 'bg-purple-950/30 border-l-2 border-purple-500' : 'bg-emerald-950/30 border-l-2 border-emerald-500'}`}
-    >
-      {type === 'reason' ? (
-        <Brain className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" />
-      ) : (
-        <Zap className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
-      )}
-      <div className="flex-1 min-w-0">
-        <p className={`text-xs font-medium uppercase tracking-wider mb-0.5 ${
-          type === 'reason' ? 'text-purple-400' : 'text-emerald-400'
-        }`}>
-          {type === 'reason' ? 'Reasoning' : 'Action'}
-        </p>
-        <p className="text-sm text-[#FAFAFA] leading-relaxed">{message}</p>
-      </div>
+    <div className="flex items-start gap-2 py-1.5">
+      <span className="text-[#71717A] text-sm shrink-0 select-none">
+        {type === 'reason' ? '💭' : '⚡'}
+      </span>
+      <p className="text-sm text-[#A1A1AA] leading-relaxed">
+        {isLatest ? <TypewriterText text={message} speed={15} /> : message}
+      </p>
     </div>
   );
 }
 
 function StepIndicator({ agent, status, messages }) {
   const getIcon = () => {
-    if (status === "complete") return <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
-    if (status === "working") return <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />;
+    if (status === "complete") return <CheckCircle2 className="w-5 h-5 text-emerald-400" />;
+    if (status === "working") return <Loader2 className="w-5 h-5 text-[#2563EB] animate-spin" />;
     return <Circle className="w-5 h-5 text-[#3F3F46]" />;
   };
 
-  const getStatusText = () => {
-    if (status === "complete") return "Complete";
-    if (status === "working") return "Working";
-    return "Queued";
+  const getStatusColor = () => {
+    if (status === "complete") return "text-[#FAFAFA]";
+    if (status === "working") return "text-[#FAFAFA]";
+    return "text-[#52525B]";
   };
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between mb-2 py-2">
-        <div className="flex items-center gap-3">
-          {getIcon()}
-          <h3 className={`font-semibold ${
-            status === "complete" ? "text-[#FAFAFA]" : 
-            status === "working" ? "text-[#FAFAFA]" : 
-            "text-[#71717A]"
-          }`}>
-            {agent}
-          </h3>
-        </div>
-        <span className={`text-xs font-mono ${
-          status === "complete" ? "text-emerald-600" : 
-          status === "working" ? "text-purple-500" : 
-          "text-[#3F3F46]"
-        }`}>
-          {getStatusText()}
-        </span>
+    <div className="py-3">
+      <div className="flex items-center gap-3 mb-2">
+        {getIcon()}
+        <h3 className={`font-medium ${getStatusColor()}`}>
+          {agent}
+        </h3>
       </div>
       
       {messages.length > 0 && (
-        <div className="space-y-2 pl-8">
+        <div className="ml-8 space-y-0.5">
           {messages.map((msg, i) => (
             <ReActMessage 
               key={i} 
