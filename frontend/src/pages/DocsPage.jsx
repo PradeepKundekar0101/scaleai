@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Loader2, Copy, Check, Play, Shield, ChevronRight, BookOpen, Code2 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -275,12 +275,16 @@ export default function DocsPage() {
   }, [slug]);
 
   const groups = config ? groupEndpoints(config.endpoints) : {};
-  const allCards = config
-    ? config.endpoints.map((ep) => ({
-        ...ep,
-        cardId: `${ep.method}-${ep.path.replace(/\//g, "_")}`,
-      }))
-    : [];
+  const allCards = useMemo(
+    () =>
+      config
+        ? config.endpoints.map((ep) => ({
+            ...ep,
+            cardId: `${ep.method}-${ep.path.replace(/\//g, "_")}`,
+          }))
+        : [],
+    [config]
+  );
 
   const scrollTo = useCallback((cardId) => {
     const el = document.getElementById(cardId);
