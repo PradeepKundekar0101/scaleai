@@ -7,7 +7,7 @@ import asyncio
 import aiohttp
 import json
 
-BACKEND_URL = "https://705243a1-cd8c-43be-b4d2-0ab1497d63f7.preview.emergentagent.com"
+BACKEND_URL = "https://keen-cerf-6.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 async def test_specific_endpoints():

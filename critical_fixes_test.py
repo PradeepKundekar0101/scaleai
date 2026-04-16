@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 
 class CriticalFixesTester:
-    def __init__(self, base_url="https://managed-api-proxy.preview.emergentagent.com"):
+    def __init__(self, base_url="https://keen-cerf-6.preview.emergentagent.com"):
         self.base_url = base_url.rstrip("/")
         self.token = None
         self.tests_run = 0
