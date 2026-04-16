@@ -116,10 +116,12 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     """Main gateway handler implementing the 11-step flow."""
     start_time = time.time()
     api_path_full = f"/{api_path}" if not api_path.startswith("/") else api_path
+    print(f"[GW_HANDLER] {request.method} slug={project_slug}, path={api_path_full}")
 
     # Step 1-2: Find project
     project = await db.projects.find_one({"slug": project_slug, "status": "live"})
     if not project:
+        print(f"[GW_HANDLER] Project not found or not live: slug={project_slug}")
         return {
             "status": 404,
             "body": {"error": "project_not_found", "message": f"No active API found for '{project_slug}'"},
@@ -131,6 +133,7 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     # Step 3: Extract & validate API key
     api_key_raw = request.headers.get("x-api-key", "")
     if not api_key_raw:
+        print(f"[GW_HANDLER] Missing X-API-Key header for {project_slug}{api_path_full}")
         return {
             "status": 401,
             "body": {"error": "missing_api_key", "message": "Provide your API key via X-API-Key header"},
@@ -140,11 +143,13 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     key_hash = hash_api_key(api_key_raw)
     api_key_doc = await db.api_keys.find_one({"key_hash": key_hash, "project_id": project_id, "is_active": True})
     if not api_key_doc:
+        print(f"[GW_HANDLER] Invalid API key for {project_slug}{api_path_full}, prefix={api_key_raw[:12]}...")
         return {
             "status": 403,
             "body": {"error": "invalid_api_key", "message": "This API key is invalid or has been revoked"},
             "headers": {},
         }
+    print(f"[GW_HANDLER] API key valid: name={api_key_doc.get('name')}, prefix={api_key_doc.get('key_prefix')}")
 
     # Step 4: Check endpoint is exposed
     endpoint_doc = None
@@ -158,11 +163,13 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
             break
 
     if not endpoint_doc:
+        print(f"[GW_HANDLER] Endpoint not exposed: {request.method} {api_path_full} (checked {len(exposed_endpoints)} endpoints)")
         return {
             "status": 404,
             "body": {"error": "endpoint_not_found", "message": f"{request.method} {api_path_full} is not available via the public API"},
             "headers": {},
         }
+    print(f"[GW_HANDLER] Endpoint matched: {endpoint_doc.get('method')} {endpoint_doc.get('path')}, rate_limit={endpoint_doc.get('rate_limit')}")
 
     # Step 5: Rate limiting
     rate_limit = endpoint_doc.get("rate_limit", 100)
@@ -185,6 +192,7 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
     }
 
     if current_count > rate_limit:
+        print(f"[GW_HANDLER] Rate limit exceeded: {current_count}/{rate_limit} for key={api_key_doc.get('key_prefix')}")
         rate_headers["X-RateLimit-Remaining"] = "0"
         return {
             "status": 429,
@@ -194,11 +202,13 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
 
     # Step 6: Get valid auth token
     token = await get_valid_token(project, db)
+    print(f"[GW_HANDLER] Auth token obtained: {'yes' if token else 'NO'} (is_mock={token == 'mock_jwt_token'})")
 
     # Step 7: Forward request
     target_url = project.get("target_backend_url", "").rstrip("/")
 
     if not target_url or not token:
+        print(f"[GW_HANDLER] Backend unreachable: target_url='{target_url}', has_token={bool(token)}")
         latency_ms = int((time.time() - start_time) * 1000)
         try:
             await db.usage_logs.insert_one({
@@ -216,6 +226,7 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
         }
 
     forward_url = f"{target_url}{api_path_full}"
+    print(f"[GW_HANDLER] Forwarding → {request.method} {forward_url}")
 
     # Build query string
     query_string = str(request.query_params)
@@ -251,22 +262,27 @@ async def gateway_handler(project_slug: str, api_path: str, request, db):
                 response_data = {"raw": resp.text}
 
     except httpx.ConnectError:
+        print(f"[GW_HANDLER] ConnectError to {forward_url}")
         upstream_status = 502
         response_data = {"error": "backend_unreachable", "message": "The upstream service is not responding"}
     except httpx.TimeoutException:
+        print(f"[GW_HANDLER] Timeout to {forward_url}")
         upstream_status = 502
         response_data = {"error": "backend_unreachable", "message": "The upstream service did not respond in time"}
     except Exception as e:
+        print(f"[GW_HANDLER] Upstream error: {e}")
         upstream_status = 502
         response_data = {"error": "backend_unreachable", "message": f"Error contacting upstream: {str(e)}"}
 
     # Step 8: Filter response
     fields_to_strip = set(endpoint_doc.get("fields_to_strip", []))
     if fields_to_strip and response_data:
+        print(f"[GW_HANDLER] Stripping fields: {fields_to_strip}")
         response_data = strip_fields(response_data, fields_to_strip)
 
     # Step 9: Log usage (fire-and-forget via unawaited task - just insert, don't block)
     latency_ms = int((time.time() - start_time) * 1000)
+    print(f"[GW_HANDLER] Done: {request.method} {project_slug}{api_path_full} → {upstream_status} ({latency_ms}ms)")
     log_doc = {
         "key_hash": key_hash,
         "key_name": api_key_doc.get("name", ""),

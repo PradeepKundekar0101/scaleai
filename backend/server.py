@@ -183,11 +183,14 @@ api_router = APIRouter(prefix="/api")
 
 @api_router.post("/auth/register")
 async def register(body: RegisterInput, response: Response):
+    print(f"[ROUTE] POST /api/auth/register | email={body.email}, name={body.name}")
     email = body.email.lower().strip()
     if not email or not body.password or len(body.password) < 6:
+        print(f"[REGISTER] Validation failed: empty email or short password")
         raise HTTPException(status_code=400, detail="Email and password (min 6 chars) required")
     existing = await db.users.find_one({"email": email})
     if existing:
+        print(f"[REGISTER] Email already registered: {email}")
         raise HTTPException(status_code=409, detail="Email already registered")
     now = datetime.now(timezone.utc).isoformat()
     user_doc = {
@@ -200,32 +203,38 @@ async def register(body: RegisterInput, response: Response):
     }
     result = await db.users.insert_one(user_doc)
     user_doc["_id"] = result.inserted_id
+    print(f"[REGISTER] User created: id={result.inserted_id}, email={email}")
     access = create_access_token(str(result.inserted_id), email)
     refresh = create_refresh_token(str(result.inserted_id))
     response.set_cookie(key="access_token", value=access, httponly=True, secure=False, samesite="lax", max_age=900, path="/")
     response.set_cookie(key="refresh_token", value=refresh, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
     user_data = serialize_user(user_doc)
     user_data["token"] = access
+    print(f"[REGISTER] Success — tokens issued for {email}")
     return user_data
 
 @api_router.post("/auth/login")
 async def login(body: LoginInput, request: Request, response: Response):
+    print(f"[ROUTE] POST /api/auth/login | email={body.email}")
     email = body.email.lower().strip()
     ip = request.client.host if request.client else "unknown"
     identifier = f"{ip}:{email}"
+    print(f"[LOGIN] IP={ip}, identifier={identifier}")
 
     # Brute force check
     attempt = await db.login_attempts.find_one({"identifier": identifier})
     if attempt and attempt.get("count", 0) >= 5:
         locked_until = attempt.get("locked_until")
         if locked_until and datetime.now(timezone.utc).isoformat() < locked_until:
+            print(f"[LOGIN] Brute-force locked: {identifier}, locked_until={locked_until}")
             raise HTTPException(status_code=429, detail="Too many failed attempts. Try again in 15 minutes.")
         else:
             await db.login_attempts.delete_one({"identifier": identifier})
+            print(f"[LOGIN] Lock expired, cleared attempts for {identifier}")
 
     user = await db.users.find_one({"email": email})
     if not user or not user.get("password_hash"):
-        # Increment failed attempts
+        print(f"[LOGIN] Failed — user not found or no password: {email}")
         await db.login_attempts.update_one(
             {"identifier": identifier},
             {"$inc": {"count": 1}, "$set": {"locked_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
@@ -234,6 +243,7 @@ async def login(body: LoginInput, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not verify_password(body.password, user["password_hash"]):
+        print(f"[LOGIN] Failed — wrong password for {email}")
         await db.login_attempts.update_one(
             {"identifier": identifier},
             {"$inc": {"count": 1}, "$set": {"locked_until": (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()}},
@@ -243,6 +253,7 @@ async def login(body: LoginInput, request: Request, response: Response):
 
     # Clear attempts on success
     await db.login_attempts.delete_one({"identifier": identifier})
+    print(f"[LOGIN] Success — user_id={user['_id']}, email={email}")
 
     access = create_access_token(str(user["_id"]), email)
     refresh = create_refresh_token(str(user["_id"]))
@@ -250,36 +261,47 @@ async def login(body: LoginInput, request: Request, response: Response):
     response.set_cookie(key="refresh_token", value=refresh, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
     user_data = serialize_user(user)
     user_data["token"] = access
+    print(f"[LOGIN] Tokens issued for {email}")
     return user_data
 
 @api_router.get("/auth/me")
 async def get_me(user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/auth/me | user_id={user.get('id')}, email={user.get('email')}")
     return user
 
 @api_router.post("/auth/logout")
 async def logout(response: Response):
+    print(f"[ROUTE] POST /api/auth/logout")
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("refresh_token", path="/")
+    print(f"[LOGOUT] Cookies cleared")
     return {"message": "Logged out"}
 
 @api_router.post("/auth/refresh")
 async def refresh_token(request: Request, response: Response):
+    print(f"[ROUTE] POST /api/auth/refresh")
     token = request.cookies.get("refresh_token")
     if not token:
+        print(f"[REFRESH] No refresh token cookie found")
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         if payload.get("type") != "refresh":
+            print(f"[REFRESH] Wrong token type: {payload.get('type')}")
             raise HTTPException(status_code=401, detail="Invalid token type")
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
+            print(f"[REFRESH] User not found for sub={payload['sub']}")
             raise HTTPException(status_code=401, detail="User not found")
         access = create_access_token(str(user["_id"]), user["email"])
         response.set_cookie(key="access_token", value=access, httponly=True, secure=False, samesite="lax", max_age=900, path="/")
+        print(f"[REFRESH] New access token issued for user_id={user['_id']}")
         return {"message": "Token refreshed"}
     except jwt.ExpiredSignatureError:
+        print(f"[REFRESH] Refresh token expired")
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:
+        print(f"[REFRESH] Invalid refresh token")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 # GitHub OAuth stubs
@@ -295,6 +317,7 @@ async def github_callback():
 
 @api_router.post("/projects")
 async def create_project(body: ProjectCreateInput, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] POST /api/projects | user_id={user['id']}, name={body.name}, repoUrl={body.repoUrl}")
     slug = slugify(body.name)
     # Ensure unique slug
     existing = await db.projects.find_one({"slug": slug})
@@ -304,6 +327,7 @@ async def create_project(body: ProjectCreateInput, user: dict = Depends(get_curr
         slug = f"{base_slug}-{counter}"
         existing = await db.projects.find_one({"slug": slug})
         counter += 1
+    print(f"[CREATE_PROJECT] Final slug={slug}")
 
     now = datetime.now(timezone.utc).isoformat()
     project_doc = {
@@ -328,12 +352,15 @@ async def create_project(body: ProjectCreateInput, user: dict = Depends(get_curr
     }
     result = await db.projects.insert_one(project_doc)
     project_doc["_id"] = result.inserted_id
+    print(f"[CREATE_PROJECT] Created project_id={result.inserted_id}, slug={slug}")
     return serialize_project(project_doc)
 
 @api_router.get("/projects")
 async def list_projects(user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/projects | user_id={user['id']}")
     cursor = db.projects.find({"user_id": ObjectId(user["id"])}).sort("created_at", -1)
     projects = await cursor.to_list(100)
+    print(f"[LIST_PROJECTS] Found {len(projects)} projects for user_id={user['id']}")
     result = []
     for p in projects:
         proj = serialize_project(p)
@@ -359,13 +386,17 @@ async def list_projects(user: dict = Depends(get_current_user)):
 
 @api_router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/projects/{project_id} | user_id={user['id']}")
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
+        print(f"[GET_PROJECT] Invalid project ID: {project_id}")
         raise HTTPException(status_code=400, detail="Invalid project ID")
     if not project:
+        print(f"[GET_PROJECT] Not found: {project_id}")
         raise HTTPException(status_code=404, detail="Project not found")
     if str(project.get("user_id")) != user["id"]:
+        print(f"[GET_PROJECT] Auth denied: project owner={project.get('user_id')}, requester={user['id']}")
         raise HTTPException(status_code=403, detail="Not authorized")
 
     result = serialize_project(project)
@@ -387,6 +418,7 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     # Connection tested?
     result["connectionTested"] = bool(project.get("cached_jwt"))
 
+    print(f"[GET_PROJECT] slug={project.get('slug')}, status={project.get('status')}, routes={len(routes)}, exposed={exposed_count}")
     return result
 
 # ── Scan & Routes ─────────────────────────────────────────
@@ -397,36 +429,46 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
     from github_service import fetch_github_files
     from ai_agents import analyze_code, audit_security, merge_analysis_and_audit
 
+    print(f"[ROUTE] POST /api/projects/{project_id}/scan | user_id={user['id']}")
+
     # Verify ownership
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
+        print(f"[SCAN] Invalid project ID: {project_id}")
         raise HTTPException(status_code=400, detail="Invalid project ID")
     if not project:
+        print(f"[SCAN] Project not found: {project_id}")
         raise HTTPException(status_code=404, detail="Project not found")
     if str(project.get("user_id")) != user["id"]:
+        print(f"[SCAN] Auth denied for project {project_id}")
         raise HTTPException(status_code=403, detail="Not authorized")
 
     # Update status to scanning
     await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "scanning"}})
+    print(f"[SCAN] Status set to 'scanning' for project {project_id}")
 
     try:
         # 1. Fetch source code
         repo_url = project.get("repo_url", "")
-        logger.info(f"Fetching files from: {repo_url}")
+        print(f"[SCAN] Step 1: Fetching files from repo_url={repo_url}")
         files = await fetch_github_files(repo_url)
-        logger.info(f"Got {len(files)} files")
+        print(f"[SCAN] Step 1 done: Got {len(files)} files")
 
         # 2. Code analysis via AI
+        print(f"[SCAN] Step 2: Running AI code analysis...")
         code_analysis = await analyze_code(files)
-        logger.info(f"Code analysis found {len(code_analysis.get('routes', []))} routes")
+        route_count = len(code_analysis.get('routes', []))
+        print(f"[SCAN] Step 2 done: Found {route_count} routes, authStrategy={code_analysis.get('authStrategy', {})}")
 
         # 3. Security audit via AI
+        print(f"[SCAN] Step 3: Running AI security audit...")
         security_audit = await audit_security(code_analysis)
-        logger.info("Security audit completed")
+        print(f"[SCAN] Step 3 done: Security audit complete")
 
         # 4. Merge results
         merged_routes = merge_analysis_and_audit(code_analysis, security_audit)
+        print(f"[SCAN] Step 4: Merged {len(merged_routes)} routes")
 
         # 5. Delete old routes and insert new ones
         await db.discovered_routes.delete_many({"project_id": ObjectId(project_id)})
@@ -438,6 +480,7 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
 
         if merged_routes:
             await db.discovered_routes.insert_many(merged_routes)
+        print(f"[SCAN] Step 5: Saved {len(merged_routes)} routes to DB")
 
         # 6. Calculate breakdown
         breakdown = {"green": 0, "yellow": 0, "red": 0}
@@ -445,6 +488,7 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
             risk = r.get("risk", "yellow")
             if risk in breakdown:
                 breakdown[risk] += 1
+        print(f"[SCAN] Step 6: Breakdown = {breakdown}")
 
         # 7. Update project status and login endpoint
         update_fields = {
@@ -457,6 +501,7 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
             update_fields["login_endpoint"] = auth_strategy["loginEndpoint"]
 
         await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": update_fields})
+        print(f"[SCAN] Complete — project {project_id} status=configuring, routes={len(merged_routes)}")
 
         return {
             "routeCount": len(merged_routes),
@@ -465,6 +510,7 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
         }
 
     except Exception as e:
+        print(f"[SCAN] FAILED for project {project_id}: {e}")
         logger.error(f"Scan failed: {e}")
         await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "draft"}})
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
@@ -482,6 +528,8 @@ async def scan_project_stream(
     import asyncio
     import json
 
+    print(f"[ROUTE] GET /api/projects/{project_id}/scan/stream | SSE streaming scan")
+
     # Manual authentication for EventSource (can't use Depends due to headers)
     auth_header = request.headers.get("Authorization", "")
     token_from_query = request.query_params.get("token", "")
@@ -493,6 +541,7 @@ async def scan_project_stream(
         token = token_from_query
     
     if not token:
+        print(f"[SCAN_STREAM] No auth token provided")
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     # Verify token (inline decode — can't use Depends for EventSource)
@@ -517,11 +566,16 @@ async def scan_project_stream(
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
+        print(f"[SCAN_STREAM] Invalid project ID: {project_id}")
         raise HTTPException(status_code=400, detail="Invalid project ID")
     if not project:
+        print(f"[SCAN_STREAM] Project not found: {project_id}")
         raise HTTPException(status_code=404, detail="Project not found")
     if str(project.get("user_id")) != user["id"]:
+        print(f"[SCAN_STREAM] Auth denied for project {project_id}")
         raise HTTPException(status_code=403, detail="Not authorized")
+
+    print(f"[SCAN_STREAM] Starting SSE stream for project {project_id}, slug={project.get('slug')}")
 
     async def event_generator():
         def emit(event_type: str, data: dict):
@@ -536,7 +590,9 @@ async def scan_project_stream(
             await asyncio.sleep(0.5)
             
             repo_url = project.get("repo_url", "")
+            print(f"[SCAN_STREAM] Step 1: Fetching files from {repo_url}")
             files = await fetch_github_files(repo_url)
+            print(f"[SCAN_STREAM] Step 1 done: {len(files)} files fetched")
             
             yield emit("step", {"agent": "Code Analyst", "type": "act", "message": f"Fetched {len(files)} files from repository"})
             await asyncio.sleep(0.3)
@@ -545,8 +601,10 @@ async def scan_project_stream(
             yield emit("step", {"agent": "Code Analyst", "type": "reason", "message": "Scanning for API route patterns (Express, FastAPI, Flask, Django)..."})
             await asyncio.sleep(0.5)
             
+            print(f"[SCAN_STREAM] Step 2: AI code analysis starting...")
             code_analysis = await analyze_code(files)
             route_count = len(code_analysis.get('routes', []))
+            print(f"[SCAN_STREAM] Step 2 done: {route_count} routes discovered")
             
             yield emit("step", {"agent": "Code Analyst", "type": "act", "message": f"Discovered {route_count} API endpoints across {len(files)} files"})
             await asyncio.sleep(0.3)
@@ -555,7 +613,9 @@ async def scan_project_stream(
             yield emit("step", {"agent": "Security Auditor", "type": "reason", "message": "Evaluating endpoints for authentication requirements and data exposure risks..."})
             await asyncio.sleep(0.5)
             
+            print(f"[SCAN_STREAM] Step 3: AI security audit starting...")
             security_audit = await audit_security(code_analysis)
+            print(f"[SCAN_STREAM] Step 3 done: security audit complete")
             
             yield emit("step", {"agent": "Security Auditor", "type": "act", "message": "Categorized endpoints by risk level (Safe, Review Needed, Blocked)"})
             await asyncio.sleep(0.3)
@@ -600,6 +660,7 @@ async def scan_project_stream(
             await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": update_fields})
 
             # Final event
+            print(f"[SCAN_STREAM] Complete — project {project_id}: {len(merged_routes)} routes, breakdown={breakdown}")
             yield emit("complete", {
                 "routeCount": len(merged_routes),
                 "breakdown": breakdown,
@@ -607,6 +668,7 @@ async def scan_project_stream(
             })
 
         except Exception as e:
+            print(f"[SCAN_STREAM] FAILED for project {project_id}: {e}")
             logger.error(f"Scan stream failed: {e}")
             await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "draft"}})
             yield emit("error", {"message": str(e)})
@@ -623,6 +685,7 @@ async def scan_project_stream(
 
 @api_router.get("/projects/{project_id}/routes")
 async def get_project_routes(project_id: str, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/projects/{project_id}/routes | user_id={user['id']}")
     # Verify ownership
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
@@ -641,10 +704,12 @@ async def get_project_routes(project_id: str, user: dict = Depends(get_current_u
     risk_order = {"green": 0, "yellow": 1, "red": 2}
     routes.sort(key=lambda r: (risk_order.get(r.get("risk", "yellow"), 1), r.get("path", "")))
 
+    print(f"[GET_ROUTES] Returning {len(routes)} routes for project {project_id}")
     return routes
 
 @api_router.post("/projects/{project_id}/endpoints")
 async def create_endpoints(project_id: str, request: Request, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] POST /api/projects/{project_id}/endpoints | user_id={user['id']}")
     body = await request.json()
     # Verify ownership
     try:
@@ -657,7 +722,9 @@ async def create_endpoints(project_id: str, request: Request, user: dict = Depen
         raise HTTPException(status_code=403, detail="Not authorized")
 
     endpoints_data = body.get("endpoints", [])
+    print(f"[CREATE_ENDPOINTS] Received {len(endpoints_data)} endpoints for project {project_id}")
     if not endpoints_data:
+        print(f"[CREATE_ENDPOINTS] No endpoints in request body")
         raise HTTPException(status_code=400, detail="No endpoints provided")
 
     # Delete existing exposed endpoints for this project
@@ -698,12 +765,14 @@ async def create_endpoints(project_id: str, request: Request, user: dict = Depen
             "isActive": True,
         })
 
+    print(f"[CREATE_ENDPOINTS] Saved {len(result_eps)} exposed endpoints for project {project_id}")
     return {"count": len(result_eps), "endpoints": result_eps}
 
 @api_router.post("/projects/{project_id}/test-connection")
 async def test_connection(project_id: str, request: Request, user: dict = Depends(get_current_user)):
     import httpx as hx
 
+    print(f"[ROUTE] POST /api/projects/{project_id}/test-connection | user_id={user['id']}")
     body = await request.json()
     # Verify ownership
     try:
@@ -719,6 +788,7 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
     login_endpoint = body.get("loginEndpoint", "/api/auth/login")
     sa_email = body.get("serviceAccountEmail", "")
     sa_password = body.get("serviceAccountPassword", "")
+    print(f"[TEST_CONN] target_url={target_url}, login_endpoint={login_endpoint}, sa_email={sa_email}")
 
     # Save credentials to project
     now = datetime.now(timezone.utc).isoformat()
@@ -735,9 +805,11 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
 
     # Check if localhost or empty — use mock mode
     is_mock = not target_url or "localhost" in target_url or "127.0.0.1" in target_url
+    print(f"[TEST_CONN] is_mock={is_mock}")
 
     if is_mock:
         # Mock success
+        print(f"[TEST_CONN] Using mock mode (localhost or empty target)")
         await db.projects.update_one(
             {"_id": ObjectId(project_id)},
             {"$set": {"cached_jwt": "mock_jwt_token", "jwt_cached_at": now}}
@@ -753,13 +825,16 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
     try:
         async with hx.AsyncClient(timeout=10.0) as http_client:
             login_url = f"{target_url}{login_endpoint}"
+            print(f"[TEST_CONN] Attempting real login at {login_url}")
             login_resp = await http_client.post(
                 login_url,
                 json={"email": sa_email, "password": sa_password},
                 headers={"Content-Type": "application/json"},
             )
 
+            print(f"[TEST_CONN] Login response: status={login_resp.status_code}")
             if login_resp.status_code != 200:
+                print(f"[TEST_CONN] Login failed ({login_resp.status_code}), falling back to mock")
                 # Fall back to mock for demo purposes
                 await db.projects.update_one(
                     {"_id": ObjectId(project_id)},
@@ -782,8 +857,10 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
             )
 
             if not token:
+                print(f"[TEST_CONN] Login succeeded but no token in response. Keys: {list(resp_data.keys())}")
                 return {"success": False, "error": "Login succeeded but no token found in response."}
 
+            print(f"[TEST_CONN] Token obtained, caching JWT")
             # Cache JWT
             await db.projects.update_one(
                 {"_id": ObjectId(project_id)},
@@ -806,6 +883,7 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
                 except Exception:
                     test_result_text = "Token obtained, endpoint test skipped"
 
+            print(f"[TEST_CONN] Success (real): {test_result_text}")
             return {
                 "success": True,
                 "tokenValidFor": "24 hours",
@@ -814,6 +892,7 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
             }
 
     except hx.ConnectError:
+        print(f"[TEST_CONN] ConnectError to {target_url}, falling back to mock")
         # Fall back to mock
         await db.projects.update_one(
             {"_id": ObjectId(project_id)},
@@ -826,6 +905,7 @@ async def test_connection(project_id: str, request: Request, user: dict = Depend
             "mock": True,
         }
     except Exception as e:
+        print(f"[TEST_CONN] Exception: {e}, falling back to mock")
         logger.error(f"Connection test error: {e}")
         # Fall back to mock
         await db.projects.update_one(
@@ -844,6 +924,8 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     """Kick off deploy as background task. Returns immediately. Frontend polls /deploy-status."""
     import hashlib
 
+    print(f"[ROUTE] POST /api/projects/{project_id}/deploy | user_id={user['id']}")
+
     # Verify ownership
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
@@ -858,8 +940,10 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     endpoints = await db.exposed_endpoints.find(
         {"project_id": ObjectId(project_id), "is_active": True}
     ).to_list(500)
+    print(f"[DEPLOY] Found {len(endpoints)} active exposed endpoints for project {project_id}")
 
     if not endpoints:
+        print(f"[DEPLOY] No endpoints configured — aborting deploy")
         raise HTTPException(status_code=400, detail="No endpoints configured. Select endpoints first.")
 
     slug = project.get("slug", "")
@@ -909,17 +993,20 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     )
 
     # Run the actual deploy in background
+    print(f"[DEPLOY] Starting background deploy: slug={slug}, gateway={gateway_base_url}, endpoints={len(ep_list)}, fieldsStripped={total_stripped}")
     background_tasks.add_task(
         _run_deploy_background,
         project_id, slug, project_name, gateway_base_url, gateway_fallback_url, ep_list, endpoints, total_stripped
     )
 
+    print(f"[DEPLOY] Background task queued, returning immediately")
     return {"status": "deploying", "message": "Deploy started"}
 
 
 @api_router.get("/projects/{project_id}/deploy-status")
 async def get_deploy_status(project_id: str, user: dict = Depends(get_current_user)):
     """Poll this endpoint to get deploy progress."""
+    print(f"[ROUTE] GET /api/projects/{project_id}/deploy-status | user_id={user['id']}")
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
@@ -930,6 +1017,7 @@ async def get_deploy_status(project_id: str, user: dict = Depends(get_current_us
     status = project.get("status", "draft")
     deploy_step = project.get("deploy_step", "")
     deploy_error = project.get("deploy_error")
+    print(f"[DEPLOY_STATUS] project={project_id}, status={status}, step={deploy_step}, error={deploy_error}")
 
     if status == "live":
         # Deploy completed — return full result
@@ -967,8 +1055,12 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
     from npm_publisher import publish_sdk_to_npm
 
     pid = ObjectId(project_id)
+    print(f"[DEPLOY_BG] ====== Background deploy started for {slug} (project_id={project_id}) ======")
+    print(f"[DEPLOY_BG] gateway_base_url={gateway_base_url}, gateway_fallback={gateway_fallback_url}")
+    print(f"[DEPLOY_BG] endpoints={len(ep_list)}, total_stripped_fields={total_stripped}")
 
     async def update_step(step):
+        print(f"[DEPLOY_BG] Step → {step}")
         await db.projects.update_one({"_id": pid}, {"$set": {"deploy_step": step}})
 
     try:
@@ -976,26 +1068,32 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
 
         # Step 1: Generate OpenAPI spec
         await update_step("generateSpec")
-        logger.info("Generating OpenAPI spec via AI...")
+        print(f"[DEPLOY_BG] Generating OpenAPI spec via AI for {project_name}...")
         openapi_spec = await generate_openapi_spec_ai(project_name, gateway_base_url, ep_list)
         if not openapi_spec:
-            logger.info("AI OpenAPI failed, using programmatic fallback")
+            print(f"[DEPLOY_BG] AI OpenAPI failed — using programmatic fallback")
             openapi_spec = _build_programmatic_openapi(project_name, gateway_base_url, ep_list)
+        else:
+            print(f"[DEPLOY_BG] OpenAPI spec generated successfully (AI)")
 
         # Step 2: Generate SDK
         await update_step("generateSdk")
-        logger.info("Generating TypeScript SDK via AI...")
+        print(f"[DEPLOY_BG] Generating TypeScript SDK via AI...")
         sdk_code = await generate_sdk_ai(project_name, gateway_base_url, ep_list)
         if not sdk_code:
-            logger.info("AI SDK failed, using programmatic fallback")
+            print(f"[DEPLOY_BG] AI SDK failed — using programmatic fallback")
             sdk_code = _build_programmatic_sdk(gateway_base_url, ep_list)
+        else:
+            print(f"[DEPLOY_BG] SDK generated successfully (AI), length={len(sdk_code)} chars")
         
         # Step 2.5: Generate SDK Documentation
-        logger.info("Generating SDK documentation via AI...")
+        print(f"[DEPLOY_BG] Generating SDK documentation via AI...")
         sdk_docs = await generate_sdk_docs_ai(project_name, slug, gateway_base_url, ep_list)
         if not sdk_docs:
-            logger.info("AI SDK docs failed, using basic template")
+            print(f"[DEPLOY_BG] AI SDK docs failed — using basic template")
             sdk_docs = _build_basic_sdk_docs(project_name, slug, gateway_base_url)
+        else:
+            print(f"[DEPLOY_BG] SDK docs generated successfully (AI)")
 
         # Step 3: Generate API key
         await update_step("createKey")
@@ -1003,6 +1101,7 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
         key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
         key_prefix = raw_key[:16]
         all_paths = [ep.get("path", "") for ep in endpoints]
+        print(f"[DEPLOY_BG] API key created: prefix={key_prefix}, allowed_paths={len(all_paths)}")
 
         await db.api_keys.insert_one({
             "key_hash": key_hash,
@@ -1017,7 +1116,7 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
 
         # Step 4: Publish SDK to npm
         await update_step("publishNpm")
-        logger.info("Publishing SDK to npm...")
+        print(f"[DEPLOY_BG] Publishing SDK to npm...")
         npm_org = os.environ.get("NPM_ORG", "@scalableai")
         npm_result = publish_sdk_to_npm(slug, sdk_code, project_name, gateway_base_url)
         npm_package_name = npm_result.get("packageName", f"{npm_org}/{slug}")
@@ -1025,12 +1124,13 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
         npm_published = npm_result.get("success", False)
 
         if npm_published:
-            logger.info(f"SDK published: {npm_package_name}@{npm_version}")
+            print(f"[DEPLOY_BG] npm publish SUCCESS: {npm_package_name}@{npm_version}")
         else:
-            logger.warning(f"npm publish failed: {npm_result.get('error', 'unknown')}")
+            print(f"[DEPLOY_BG] npm publish FAILED: {npm_result.get('error', 'unknown')}")
 
         # Step 5: Activate gateway — mark project as live
         await update_step("activateGateway")
+        print(f"[DEPLOY_BG] Activating gateway and setting status=live")
         await db.projects.update_one(
             {"_id": pid},
             {"$set": {
@@ -1049,9 +1149,10 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }}
         )
-        logger.info(f"Deploy complete for {project_name} ({slug})")
+        print(f"[DEPLOY_BG] ====== Deploy COMPLETE for {project_name} ({slug}) ======")
 
     except Exception as e:
+        print(f"[DEPLOY_BG] ====== Deploy FAILED for {slug}: {e} ======")
         logger.error(f"Deploy background task failed: {e}")
         await db.projects.update_one(
             {"_id": pid},
@@ -1270,6 +1371,7 @@ def _build_programmatic_sdk(gateway_base_url: str, ep_list: list) -> str:
 @api_router.post("/projects/{project_id}/keys")
 async def create_api_key(project_id: str, request: Request, user: dict = Depends(get_current_user)):
     import hashlib as hl
+    print(f"[ROUTE] POST /api/projects/{project_id}/keys | user_id={user['id']}")
     body = await request.json()
 
     try:
@@ -1304,6 +1406,7 @@ async def create_api_key(project_id: str, request: Request, user: dict = Depends
         "created_at": now,
     })
 
+    print(f"[CREATE_KEY] Created key '{key_name}' prefix={key_prefix} for project {project_id}, allowed_paths={len(all_paths)}")
     return {
         "apiKey": raw_key,
         "keyPrefix": key_prefix,
@@ -1315,6 +1418,7 @@ async def create_api_key(project_id: str, request: Request, user: dict = Depends
 
 @api_router.get("/projects/{project_id}/keys")
 async def list_api_keys(project_id: str, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/projects/{project_id}/keys | user_id={user['id']}")
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
@@ -1327,6 +1431,7 @@ async def list_api_keys(project_id: str, user: dict = Depends(get_current_user))
     keys = await db.api_keys.find(
         {"project_id": ObjectId(project_id)},
     ).to_list(100)
+    print(f"[LIST_KEYS] Returning {len(keys)} keys for project {project_id}")
 
     return [
         {
@@ -1342,26 +1447,31 @@ async def list_api_keys(project_id: str, user: dict = Depends(get_current_user))
 
 @api_router.delete("/keys/{key_id}")
 async def delete_api_key(key_id: str, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] DELETE /api/keys/{key_id} | user_id={user['id']}")
     try:
         key_doc = await db.api_keys.find_one({"_id": ObjectId(key_id)})
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid key ID")
     if not key_doc:
+        print(f"[DELETE_KEY] Key not found: {key_id}")
         raise HTTPException(status_code=404, detail="Key not found")
 
     # Verify ownership via project
     project = await db.projects.find_one({"_id": key_doc.get("project_id")})
     if not project or str(project.get("user_id")) != user["id"]:
+        print(f"[DELETE_KEY] Auth denied for key {key_id}")
         raise HTTPException(status_code=403, detail="Not authorized")
 
     await db.api_keys.update_one(
         {"_id": ObjectId(key_id)},
         {"$set": {"is_active": False}}
     )
+    print(f"[DELETE_KEY] Key revoked: {key_id}, prefix={key_doc.get('key_prefix')}")
     return {"message": "Key revoked"}
 
 @api_router.get("/projects/{project_id}/analytics")
 async def get_analytics(project_id: str, user: dict = Depends(get_current_user)):
+    print(f"[ROUTE] GET /api/projects/{project_id}/analytics | user_id={user['id']}")
     try:
         project = await db.projects.find_one({"_id": ObjectId(project_id)})
     except Exception:
@@ -1372,6 +1482,7 @@ async def get_analytics(project_id: str, user: dict = Depends(get_current_user))
         raise HTTPException(status_code=403, detail="Not authorized")
 
     slug = project.get("slug", "")
+    print(f"[ANALYTICS] Querying usage_logs for slug={slug}")
 
     # Total calls
     total_calls = await db.usage_logs.count_documents({"project_slug": slug})
@@ -1448,6 +1559,7 @@ async def get_analytics(project_id: str, user: dict = Depends(get_current_user))
             "latencyMs": r.get("latency_ms", 0),
         })
 
+    print(f"[ANALYTICS] slug={slug}: totalCalls={total_calls}, activeKeys={active_keys}, avgLatency={avg_latency}ms, errorRate={error_rate}%")
     return {
         "totalCalls": total_calls,
         "activeKeys": active_keys,
@@ -1460,21 +1572,28 @@ async def get_analytics(project_id: str, user: dict = Depends(get_current_user))
 
 @api_router.get("/projects/{slug}/spec")
 async def get_spec(slug: str):
+    print(f"[ROUTE] GET /api/projects/{slug}/spec")
     project = await db.projects.find_one({"slug": slug})
     if not project:
+        print(f"[GET_SPEC] Project not found for slug={slug}")
         raise HTTPException(status_code=404, detail="Project not found")
     spec = project.get("open_api_spec")
     if not spec:
+        print(f"[GET_SPEC] No OpenAPI spec for slug={slug}")
         raise HTTPException(status_code=404, detail="OpenAPI spec not generated yet. Deploy the project first.")
+    print(f"[GET_SPEC] Returning spec for slug={slug}")
     return spec
 
 @api_router.get("/projects/{slug}/docs-config")
 async def get_docs_config(slug: str):
     """Public endpoint — returns everything the docs page needs."""
+    print(f"[ROUTE] GET /api/projects/{slug}/docs-config")
     project = await db.projects.find_one({"slug": slug})
     if not project:
+        print(f"[DOCS_CONFIG] Project not found for slug={slug}")
         raise HTTPException(status_code=404, detail="Project not found")
     if project.get("status") != "live":
+        print(f"[DOCS_CONFIG] Project slug={slug} is not live (status={project.get('status')})")
         raise HTTPException(status_code=404, detail="Project is not deployed yet.")
 
     spec = project.get("open_api_spec")
@@ -1513,6 +1632,7 @@ async def get_docs_config(slug: str):
 
     gateway_fallback = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
 
+    print(f"[DOCS_CONFIG] Returning config for slug={slug}: {len(ep_list)} endpoints, gateway={gateway_url}")
     return {
         "projectName": project.get("name") or slug,
         "slug": slug,
@@ -1535,8 +1655,10 @@ from fastapi.responses import JSONResponse
 # Path-based gateway: /api/gateway/{slug}/{path}
 @app.api_route("/api/gateway/{project_slug}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def gateway_route(project_slug: str, path: str, request: Request):
+    print(f"[GATEWAY] {request.method} /api/gateway/{project_slug}/{path} | client={request.client.host if request.client else 'unknown'}")
     from gateway import gateway_handler
     result = await gateway_handler(project_slug, path, request, db)
+    print(f"[GATEWAY] Response: status={result['status']} for {request.method} /{path} (slug={project_slug})")
     resp = JSONResponse(
         status_code=result["status"],
         content=result["body"],
@@ -1577,9 +1699,11 @@ async def subdomain_gateway_middleware(request: Request, call_next):
             return await call_next(request)
 
         path = request.url.path.lstrip("/")
+        print(f"[SUBDOMAIN_GW] {request.method} {host}/{path} → slug={slug}")
 
         # Handle CORS preflight for subdomain requests
         if request.method == "OPTIONS":
+            print(f"[SUBDOMAIN_GW] CORS preflight for {slug}/{path}")
             resp = JSONResponse(status_code=204, content=None)
             resp.headers["Access-Control-Allow-Origin"] = "*"
             resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
@@ -1590,6 +1714,7 @@ async def subdomain_gateway_middleware(request: Request, call_next):
         # Route through the gateway handler
         from gateway import gateway_handler
         result = await gateway_handler(slug, path, request, db)
+        print(f"[SUBDOMAIN_GW] Response: status={result['status']} for {request.method} {slug}/{path}")
         resp = JSONResponse(
             status_code=result["status"],
             content=result["body"],

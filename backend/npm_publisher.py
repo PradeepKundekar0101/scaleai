@@ -12,6 +12,35 @@ import re
 logger = logging.getLogger(__name__)
 
 
+def _find_npm() -> str:
+    """Resolve the npm binary path, checking PATH and common install locations."""
+    found = shutil.which("npm")
+    if found:
+        return found
+    for candidate in [
+        "/usr/bin/npm",
+        "/usr/local/bin/npm",
+        "/usr/lib/node_modules/npm/bin/npm-cli.js",
+    ]:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "npm not found. Ensure Node.js is installed in the container "
+        "(the backend Dockerfile should install it)."
+    )
+
+
+def _find_npx() -> str:
+    """Resolve the npx binary path."""
+    found = shutil.which("npx")
+    if found:
+        return found
+    for candidate in ["/usr/bin/npx", "/usr/local/bin/npx"]:
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError("npx not found. Ensure Node.js is installed in the container.")
+
+
 def extract_ts_code(raw_text: str) -> str:
     """Extract TypeScript code from AI response, stripping markdown fences."""
     text = raw_text.strip()
@@ -54,6 +83,10 @@ def publish_sdk_to_npm(slug: str, sdk_code: str, project_name: str, gateway_url:
     tmp_dir = tempfile.mkdtemp(prefix=f"scalable-sdk-{slug}-")
 
     try:
+        npm_bin = _find_npm()
+        npx_bin = _find_npx()
+        logger.info(f"Using npm at {npm_bin}, npx at {npx_bin}")
+
         # 1. Write .npmrc with auth token
         npmrc_path = os.path.join(tmp_dir, ".npmrc")
         with open(npmrc_path, "w") as f:
@@ -168,7 +201,7 @@ MIT
         # 6. Install dependencies and compile
         logger.info(f"Installing dependencies in {tmp_dir}")
         install_result = subprocess.run(
-            ["npm", "install", "--ignore-scripts"],
+            [npm_bin, "install", "--ignore-scripts"],
             cwd=tmp_dir,
             capture_output=True,
             text=True,
@@ -179,7 +212,7 @@ MIT
 
         logger.info("Compiling TypeScript SDK")
         compile_result = subprocess.run(
-            ["npx", "tsc"],
+            [npx_bin, "tsc"],
             cwd=tmp_dir,
             capture_output=True,
             text=True,
@@ -214,7 +247,7 @@ MIT
         # 7. Publish to npm
         logger.info(f"Publishing {package_name}@{version} to npm")
         publish_result = subprocess.run(
-            ["npm", "publish", "--access", "public"],
+            [npm_bin, "publish", "--access", "public"],
             cwd=tmp_dir,
             capture_output=True,
             text=True,
@@ -251,7 +284,7 @@ MIT
                 json.dump(pkg_json, f, indent=2)
 
             publish_result = subprocess.run(
-                ["npm", "publish", "--access", "public"],
+                [npm_bin, "publish", "--access", "public"],
                 cwd=tmp_dir,
                 capture_output=True,
                 text=True,
