@@ -28,7 +28,7 @@ function StatusColor({ code }) {
   if (code >= 200 && code < 300) return <span className="text-emerald-700 font-mono text-xs font-medium">{code}</span>;
   if (code >= 400 && code < 500) return <span className="text-amber-700 font-mono text-xs font-medium">{code}</span>;
   if (code >= 500) return <span className="text-red-700 font-mono text-xs font-medium">{code}</span>;
-  return <span className="text-[#292827]/50 font-mono text-xs">{code}</span>;
+  return <span className="text-[var(--text-primary)]/50 font-mono text-xs">{code}</span>;
 }
 
 function relativeTime(iso) {
@@ -58,16 +58,16 @@ function Skeleton({ className }) {
 function StatCard({ icon: Icon, label, value, suffix, testId }) {
   return (
     <div
-      className="bg-white border border-[#dcd7d3] rounded-2xl p-6 shadow-sm"
+      className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm"
       data-testid={testId}
     >
       <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-[#714cb6]" />
-        <span className="text-xs text-[#292827]/50 uppercase tracking-wider font-medium">{label}</span>
+        <Icon className="w-4 h-4 text-[var(--accent-primary)]" />
+        <span className="text-xs text-[var(--text-primary)]/50 uppercase tracking-wider font-medium">{label}</span>
       </div>
-      <p className="text-[#292827] text-4xl font-bold tracking-tight">
+      <p className="text-[var(--text-primary)] text-4xl font-bold tracking-tight">
         {value}
-        {suffix && <span className="text-xl font-normal text-[#292827]/40 ml-1">{suffix}</span>}
+        {suffix && <span className="text-xl font-normal text-[var(--text-primary)]/40 ml-1">{suffix}</span>}
       </p>
     </div>
   );
@@ -76,9 +76,9 @@ function StatCard({ icon: Icon, label, value, suffix, testId }) {
 function CustomTooltipArea({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-[#dcd7d3] rounded-lg px-3 py-2 text-xs shadow-lg">
-      <p className="text-[#292827]/50 mb-1">{label}</p>
-      <p className="text-[#292827] font-semibold">{formatNumber(payload[0].value)} calls</p>
+    <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs shadow-lg">
+      <p className="text-[var(--text-primary)]/50 mb-1">{label}</p>
+      <p className="text-[var(--text-primary)] font-semibold">{formatNumber(payload[0].value)} calls</p>
     </div>
   );
 }
@@ -86,8 +86,8 @@ function CustomTooltipArea({ active, payload, label }) {
 function CustomTooltipBar({ active, payload }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-[#dcd7d3] rounded-lg px-3 py-2 text-xs shadow-lg">
-      <p className="text-[#292827] font-semibold">{formatNumber(payload[0].value)} calls</p>
+    <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg px-3 py-2 text-xs shadow-lg">
+      <p className="text-[var(--text-primary)] font-semibold">{formatNumber(payload[0].value)} calls</p>
     </div>
   );
 }
@@ -144,16 +144,16 @@ export default function AnalyticsPage() {
         <button
           onClick={() => navigate(`/endpoints/${projectId}`)}
           data-testid="analytics-back-btn"
-          className="flex items-center gap-1.5 text-xs text-[#292827]/50 hover:text-[#292827] transition-colors mb-4"
+          className="flex items-center gap-1.5 text-xs text-[var(--text-primary)]/50 hover:text-[var(--text-primary)] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to project
         </button>
 
         <div className="mb-8">
-          <h1 className="text-[#292827] text-3xl font-semibold tracking-tight leading-[0.96]" data-testid="analytics-title">
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]" data-testid="analytics-title">
             API Analytics
           </h1>
-          <p className="text-[#292827]/50 text-sm mt-1.5">{project?.name}</p>
+          <p className="text-[var(--text-primary)]/50 text-sm mt-1.5">{project?.name}</p>
         </div>
 
         {/* Stats Cards */}
@@ -167,8 +167,8 @@ export default function AnalyticsPage() {
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Area Chart - Calls Over Time */}
-          <div className="bg-white border border-[#dcd7d3] rounded-2xl p-6 shadow-sm" data-testid="chart-calls-over-time">
-            <h2 className="text-[#292827] text-lg font-semibold mb-4">API Calls Over Time</h2>
+          <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm" data-testid="chart-calls-over-time">
+            <h2 className="text-[var(--text-primary)] text-lg font-semibold mb-4">API Calls Over Time</h2>
             <ResponsiveContainer width="100%" height={240}>
               <AreaChart data={data?.callsByDay || []}>
                 <defs>
@@ -208,13 +208,13 @@ export default function AnalyticsPage() {
               </AreaChart>
             </ResponsiveContainer>
             {isEmpty && (
-              <p className="text-center text-[#292827]/30 text-xs mt-2">No traffic data yet</p>
+              <p className="text-center text-[var(--text-primary)]/30 text-xs mt-2">No traffic data yet</p>
             )}
           </div>
 
           {/* Bar Chart - Top Endpoints */}
-          <div className="bg-white border border-[#dcd7d3] rounded-2xl p-6 shadow-sm" data-testid="chart-top-endpoints">
-            <h2 className="text-[#292827] text-lg font-semibold mb-4">Top Endpoints</h2>
+          <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm" data-testid="chart-top-endpoints">
+            <h2 className="text-[var(--text-primary)] text-lg font-semibold mb-4">Top Endpoints</h2>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart
                 data={data?.callsByEndpoint || []}
@@ -242,20 +242,20 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
             {isEmpty && (
-              <p className="text-center text-[#292827]/30 text-xs mt-2">No endpoint data yet</p>
+              <p className="text-center text-[var(--text-primary)]/30 text-xs mt-2">No endpoint data yet</p>
             )}
           </div>
         </div>
 
         {/* Recent Requests Table */}
-        <div className="bg-white border border-[#dcd7d3] rounded-2xl overflow-hidden shadow-sm" data-testid="recent-requests">
-          <div className="px-6 py-4 border-b border-[#dcd7d3]">
-            <h2 className="text-[#292827] text-lg font-semibold">Recent Requests</h2>
+        <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl overflow-hidden shadow-sm" data-testid="recent-requests">
+          <div className="px-6 py-4 border-b border-[var(--border-primary)]">
+            <h2 className="text-[var(--text-primary)] text-lg font-semibold">Recent Requests</h2>
           </div>
           {(data?.recentRequests?.length || 0) === 0 ? (
             <div className="px-6 py-12 text-center" data-testid="empty-requests">
-              <p className="text-[#292827] font-semibold mb-1">No API traffic yet</p>
-              <p className="text-[#292827]/50 text-sm">
+              <p className="text-[var(--text-primary)] font-semibold mb-1">No API traffic yet</p>
+              <p className="text-[var(--text-primary)]/50 text-sm">
                 Once consumers start using your API, you'll see analytics here
               </p>
             </div>
@@ -263,30 +263,30 @@ export default function AnalyticsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-[#f5f3f0] border-b border-[#dcd7d3]">
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">Time</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">Endpoint</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">Method</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">API Key</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">Status</th>
-                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[#292827]/50">Latency</th>
+                  <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border-primary)]">
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">Time</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">Endpoint</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">Method</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">API Key</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">Status</th>
+                    <th className="px-4 py-2.5 text-left text-[10px] font-semibold tracking-wider uppercase text-[var(--text-primary)]/50">Latency</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.recentRequests.map((r, i) => (
-                    <tr key={i} className="border-b border-[#dcd7d3] last:border-0 hover:bg-[#f5f3f0]/50 transition-colors" data-testid={`request-row-${i}`}>
-                      <td className="px-4 py-2.5 text-xs text-[#292827]/50 whitespace-nowrap">{relativeTime(r.timestamp)}</td>
+                    <tr key={i} className="border-b border-[var(--border-primary)] last:border-0 hover:bg-[var(--bg-secondary)]/50 transition-colors" data-testid={`request-row-${i}`}>
+                      <td className="px-4 py-2.5 text-xs text-[var(--text-primary)]/50 whitespace-nowrap">{relativeTime(r.timestamp)}</td>
                       <td className="px-4 py-2.5">
-                        <code className="font-mono text-xs text-[#292827]">{r.endpoint}</code>
+                        <code className="font-mono text-xs text-[var(--text-primary)]">{r.endpoint}</code>
                       </td>
                       <td className="px-4 py-2.5">
                         <span className={`inline-flex items-center justify-center text-[10px] font-bold tracking-wider uppercase px-2 py-1 rounded-lg border ${METHOD_COLORS[r.method] || METHOD_COLORS.GET}`}>
                           {r.method}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-[#292827]/50">{r.keyName || "—"}</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--text-primary)]/50">{r.keyName || "—"}</td>
                       <td className="px-4 py-2.5"><StatusColor code={r.statusCode} /></td>
-                      <td className="px-4 py-2.5 text-xs text-[#292827]/50 font-mono">{r.latencyMs}ms</td>
+                      <td className="px-4 py-2.5 text-xs text-[var(--text-primary)]/50 font-mono">{r.latencyMs}ms</td>
                     </tr>
                   ))}
                 </tbody>

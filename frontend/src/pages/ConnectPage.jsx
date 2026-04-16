@@ -127,8 +127,8 @@ export default function ConnectPage() {
       <div className="max-w-2xl mx-auto" data-testid="connect-page">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-[#292827] text-3xl font-semibold tracking-tight leading-[0.96]">Connect Your Repository</h1>
-          <p className="text-[#292827]/50 text-sm mt-1.5">
+          <h1 className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]">Connect Your Repository</h1>
+          <p className="text-[var(--text-primary)]/50 text-sm mt-1.5">
             Our AI agents will scan your codebase and discover every API route
           </p>
         </div>
@@ -138,38 +138,38 @@ export default function ConnectPage() {
           <div className="space-y-6" data-testid="connect-input-state">
             {!projectIdParam && (
               <div className="space-y-2">
-                <Label className="text-[#292827] text-sm font-medium">Project Name</Label>
+                <Label className="text-[var(--text-primary)] text-sm font-medium">Project Name</Label>
                 <Input
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   placeholder="QuickBite API"
                   data-testid="connect-project-name-input"
-                  className="bg-white border-[#dcd7d3] text-[#292827] placeholder:text-[#292827]/30 focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 rounded-lg h-11"
+                  className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-primary)]/30 focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-11"
                 />
               </div>
             )}
 
             <div className="space-y-2">
-              <Label className="text-[#292827] text-sm font-medium">GitHub Repository URL</Label>
+              <Label className="text-[var(--text-primary)] text-sm font-medium">GitHub Repository URL</Label>
               <div className="flex gap-3">
                 <Input
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
                   placeholder="https://github.com/your-org/your-repo"
                   data-testid="connect-repo-url-input"
-                  className="bg-white border-[#dcd7d3] text-[#292827] placeholder:text-[#292827]/30 focus:border-[#714cb6] focus:ring-1 focus:ring-[#cbb7fb]/30 rounded-lg h-12 font-mono text-sm flex-1"
+                  className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-primary)]/30 focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-12 font-mono text-sm flex-1"
                 />
                 <Button
                   onClick={handleScan}
                   disabled={!repoUrl.trim()}
                   data-testid="connect-scan-btn"
-                  className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg h-12 px-6 text-sm font-semibold shrink-0"
+                  className="bg-[#292827] hover:bg-[var(--text-primary)] text-white rounded-lg h-12 px-6 text-sm font-semibold shrink-0"
                 >
                   <Search className="w-4 h-4 mr-2" />
                   Scan Codebase
                 </Button>
               </div>
-              <p className="text-xs text-[#292827]/40">
+              <p className="text-xs text-[var(--text-primary)]/40">
                 We read your code to discover API routes. We never store or modify your source code.
               </p>
             </div>
@@ -179,12 +179,12 @@ export default function ConnectPage() {
         {/* State 2: Scanning */}
         {state === "scanning" && (
           <div
-            className="bg-white border border-[#dcd7d3] rounded-2xl p-6 shadow-sm"
+            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm"
             data-testid="connect-scanning-state"
           >
             <div className="mb-4">
-              <h2 className="text-[#292827] font-semibold text-lg">
-                Scanning <span className="font-mono text-[#714cb6]">{repoName}</span>...
+              <h2 className="text-[var(--text-primary)] font-semibold text-lg">
+                Scanning <span className="font-mono text-[var(--accent-primary)]">{repoName}</span>...
               </h2>
             </div>
 
@@ -211,41 +211,41 @@ export default function ConnectPage() {
         {/* State 3: Complete */}
         {state === "complete" && scanResult && (
           <div
-            className="bg-white border border-[#dcd7d3] rounded-2xl p-6 shadow-sm"
+            className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-6 shadow-sm"
             data-testid="connect-complete-state"
           >
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-[#292827] font-semibold text-lg">Scan Complete</h2>
+              <h2 className="text-[var(--text-primary)] font-semibold text-lg">Scan Complete</h2>
             </div>
 
-            <p className="text-[#292827]/60 text-sm mb-6">
-              Discovered <span className="text-[#292827] font-semibold">{scanResult.routeCount}</span> routes in{" "}
-              <span className="font-mono text-[#714cb6]">{repoName}</span>
+            <p className="text-[var(--text-primary)]/60 text-sm mb-6">
+              Discovered <span className="text-[var(--text-primary)] font-semibold">{scanResult.routeCount}</span> routes in{" "}
+              <span className="font-mono text-[var(--accent-primary)]">{repoName}</span>
             </p>
 
             <div className="flex items-center gap-6 mb-8">
               <div className="flex items-center gap-2" data-testid="scan-green-count">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
-                <span className="text-sm text-[#292827] font-medium">{scanResult.breakdown?.green || 0}</span>
-                <span className="text-sm text-[#292827]/50">Safe</span>
+                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.green || 0}</span>
+                <span className="text-sm text-[var(--text-primary)]/50">Safe</span>
               </div>
               <div className="flex items-center gap-2" data-testid="scan-yellow-count">
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="text-sm text-[#292827] font-medium">{scanResult.breakdown?.yellow || 0}</span>
-                <span className="text-sm text-[#292827]/50">Need Review</span>
+                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.yellow || 0}</span>
+                <span className="text-sm text-[var(--text-primary)]/50">Need Review</span>
               </div>
               <div className="flex items-center gap-2" data-testid="scan-red-count">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                <span className="text-sm text-[#292827] font-medium">{scanResult.breakdown?.red || 0}</span>
-                <span className="text-sm text-[#292827]/50">Blocked</span>
+                <span className="text-sm text-[var(--text-primary)] font-medium">{scanResult.breakdown?.red || 0}</span>
+                <span className="text-sm text-[var(--text-primary)]/50">Blocked</span>
               </div>
             </div>
 
             <Button
               onClick={() => navigate(`/endpoints/${projectId}`)}
               data-testid="configure-endpoints-btn"
-              className="bg-[#292827] hover:bg-[#1a1918] text-white rounded-lg text-sm font-semibold h-10 px-5"
+              className="bg-[#292827] hover:bg-[var(--text-primary)] text-white rounded-lg text-sm font-semibold h-10 px-5"
             >
               Configure Endpoints <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
