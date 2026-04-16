@@ -1,0 +1,257 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import api, { formatApiError } from "@/lib/api";
+import AppLayout from "@/components/AppLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Search, CheckCircle2, Loader2, Circle, ArrowRight, Shield, Eye } from "lucide-react";
+import { toast } from "sonner";
+
+function StepIndicator({ status, label, sublabel }) {
+  return (
+    <div className="flex items-start gap-3 py-3">
+      <div className="mt-0.5">
+        {status === "complete" && <CheckCircle2 className="w-5 h-5 text-emerald-400" />}
+        {status === "working" && <Loader2 className="w-5 h-5 text-[#2563EB] animate-spin" />}
+        {status === "pending" && <Circle className="w-5 h-5 text-[#3F3F46]" />}
+      </div>
+      <div className="flex-1">
+        <p className={`text-sm font-medium ${status === "complete" ? "text-[#FAFAFA]" : status === "working" ? "text-[#FAFAFA]" : "text-[#71717A]"}`}>
+          {label}
+        </p>
+        {sublabel && (
+          <p className={`text-xs mt-0.5 ${status === "complete" ? "text-emerald-400" : status === "working" ? "text-[#2563EB]" : "text-[#3F3F46]"}`}>
+            {sublabel}
+          </p>
+        )}
+      </div>
+      <span className={`text-xs font-mono mt-1 ${
+        status === "complete" ? "text-emerald-400" : status === "working" ? "text-[#2563EB]" : "text-[#3F3F46]"
+      }`}>
+        {status === "complete" ? "Done" : status === "working" ? "Running" : "Queued"}
+      </span>
+    </div>
+  );
+}
+
+export default function ConnectPage() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const projectIdParam = searchParams.get("projectId");
+
+  const [repoUrl, setRepoUrl] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [projectId, setProjectId] = useState(projectIdParam || "");
+  const [state, setState] = useState("input"); // input | scanning | complete
+  const [scanResult, setScanResult] = useState(null);
+  const [repoName, setRepoName] = useState("");
+
+  // Step statuses for scanning animation
+  const [steps, setSteps] = useState({
+    codeAnalyst: "pending",
+    securityAuditor: "pending",
+    riskAssessment: "pending",
+  });
+
+  const scanStartedRef = useRef(false);
+
+  // Load project if projectId given
+  useEffect(() => {
+    if (projectIdParam) {
+      api.get(`/projects/${projectIdParam}`).then(({ data }) => {
+        setRepoUrl(data.repoUrl || "");
+        setProjectName(data.name || "");
+        setProjectId(data.id);
+        setRepoName(extractRepoName(data.repoUrl || ""));
+      }).catch(() => {});
+    }
+  }, [projectIdParam]);
+
+  const extractRepoName = (url) => {
+    const match = url.match(/github\.com\/[^/]+\/([^/]+)/);
+    return match ? match[1] : url;
+  };
+
+  const handleScan = useCallback(async () => {
+    if (scanStartedRef.current) return;
+    scanStartedRef.current = true;
+
+    let currentProjectId = projectId;
+    const name = repoName || extractRepoName(repoUrl);
+    setRepoName(name);
+
+    try {
+      // Create project if needed
+      if (!currentProjectId) {
+        const pName = projectName.trim() || name || "New Project";
+        const { data } = await api.post("/projects", { name: pName, repoUrl: repoUrl.trim() });
+        currentProjectId = data.id;
+        setProjectId(data.id);
+      }
+
+      setState("scanning");
+
+      // Start animated step transitions
+      setSteps({ codeAnalyst: "working", securityAuditor: "pending", riskAssessment: "pending" });
+
+      const timer1 = setTimeout(() => {
+        setSteps(s => ({ ...s, codeAnalyst: "complete", securityAuditor: "working" }));
+      }, 3000);
+
+      const timer2 = setTimeout(() => {
+        setSteps(s => ({ ...s, securityAuditor: "complete", riskAssessment: "working" }));
+      }, 6000);
+
+      // Make the actual API call
+      const { data } = await api.post(`/projects/${currentProjectId}/scan`);
+
+      // Clear timers and mark all complete
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      setSteps({ codeAnalyst: "complete", securityAuditor: "complete", riskAssessment: "complete" });
+      setScanResult(data);
+
+      // Short delay before transitioning to complete state
+      setTimeout(() => setState("complete"), 800);
+
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Scan failed");
+      setState("input");
+      scanStartedRef.current = false;
+    }
+  }, [projectId, projectName, repoUrl, repoName]);
+
+  return (
+    <AppLayout>
+      <div className="max-w-2xl mx-auto" data-testid="connect-page">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-[#FAFAFA] text-2xl font-semibold tracking-tight">Connect Your Repository</h1>
+          <p className="text-[#71717A] text-sm mt-1">
+            Our AI agents will scan your codebase and discover every API route
+          </p>
+        </div>
+
+        {/* State 1: Input */}
+        {state === "input" && (
+          <div className="space-y-6" data-testid="connect-input-state">
+            {!projectIdParam && (
+              <div className="space-y-2">
+                <Label className="text-[#A1A1AA] text-xs uppercase tracking-wider">Project Name</Label>
+                <Input
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="QuickBite API"
+                  data-testid="connect-project-name-input"
+                  className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-10"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label className="text-[#A1A1AA] text-xs uppercase tracking-wider">GitHub Repository URL</Label>
+              <div className="flex gap-3">
+                <Input
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/your-org/your-repo"
+                  data-testid="connect-repo-url-input"
+                  className="bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder:text-[#3F3F46] focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-sm h-12 font-mono text-sm flex-1"
+                />
+                <Button
+                  onClick={handleScan}
+                  disabled={!repoUrl.trim()}
+                  data-testid="connect-scan-btn"
+                  className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm h-12 px-6 text-sm font-medium shrink-0"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Scan Codebase
+                </Button>
+              </div>
+              <p className="text-xs text-[#3F3F46]">
+                We read your code to discover API routes. We never store or modify your source code.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* State 2: Scanning */}
+        {state === "scanning" && (
+          <div
+            className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-6"
+            data-testid="connect-scanning-state"
+          >
+            <div className="mb-4">
+              <h2 className="text-[#FAFAFA] font-medium text-base">
+                Scanning <span className="font-mono text-[#2563EB]">{repoName}</span>...
+              </h2>
+            </div>
+
+            <div className="divide-y divide-[#27272A]/50">
+              <StepIndicator
+                status={steps.codeAnalyst}
+                label="Code Analyst Agent"
+                sublabel={steps.codeAnalyst === "complete" ? "Routes discovered" : steps.codeAnalyst === "working" ? "Scanning codebase, discovering routes..." : "Waiting..."}
+              />
+              <StepIndicator
+                status={steps.securityAuditor}
+                label="Security Auditor Agent"
+                sublabel={steps.securityAuditor === "complete" ? "Risk assessment complete" : steps.securityAuditor === "working" ? "Reviewing routes for public exposure..." : "Waiting..."}
+              />
+              <StepIndicator
+                status={steps.riskAssessment}
+                label="Risk Assessment"
+                sublabel={steps.riskAssessment === "complete" ? "Report generated" : steps.riskAssessment === "working" ? "Generating security report..." : "Waiting..."}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* State 3: Complete */}
+        {state === "complete" && scanResult && (
+          <div
+            className="bg-[#0F0F12] border border-[#27272A] rounded-sm p-6"
+            data-testid="connect-complete-state"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-[#FAFAFA] font-medium text-base">Scan Complete</h2>
+            </div>
+
+            <p className="text-[#A1A1AA] text-sm mb-6">
+              Discovered <span className="text-[#FAFAFA] font-medium">{scanResult.routeCount}</span> routes in{" "}
+              <span className="font-mono text-[#2563EB]">{repoName}</span>
+            </p>
+
+            <div className="flex items-center gap-6 mb-8">
+              <div className="flex items-center gap-2" data-testid="scan-green-count">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <span className="text-sm text-[#FAFAFA]">{scanResult.breakdown?.green || 0}</span>
+                <span className="text-sm text-[#71717A]">Safe</span>
+              </div>
+              <div className="flex items-center gap-2" data-testid="scan-yellow-count">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                <span className="text-sm text-[#FAFAFA]">{scanResult.breakdown?.yellow || 0}</span>
+                <span className="text-sm text-[#71717A]">Need Review</span>
+              </div>
+              <div className="flex items-center gap-2" data-testid="scan-red-count">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                <span className="text-sm text-[#FAFAFA]">{scanResult.breakdown?.red || 0}</span>
+                <span className="text-sm text-[#71717A]">Blocked</span>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => navigate(`/endpoints/${projectId}`)}
+              data-testid="configure-endpoints-btn"
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-sm text-sm h-10"
+            >
+              Configure Endpoints <ArrowRight className="w-4 h-4 ml-1.5" />
+            </Button>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

@@ -325,15 +325,106 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not authorized")
     return serialize_project(project)
 
-# ── Stub routes (501) ────────────────────────────────────
+# ── Scan & Routes ─────────────────────────────────────────
 
 @api_router.post("/projects/{project_id}/scan")
 async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    from github_service import fetch_github_files
+    from ai_agents import analyze_code, audit_security, merge_analysis_and_audit
+
+    # Verify ownership
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Update status to scanning
+    await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "scanning"}})
+
+    try:
+        # 1. Fetch source code
+        repo_url = project.get("repo_url", "")
+        logger.info(f"Fetching files from: {repo_url}")
+        files = await fetch_github_files(repo_url)
+        logger.info(f"Got {len(files)} files")
+
+        # 2. Code analysis via AI
+        code_analysis = await analyze_code(files)
+        logger.info(f"Code analysis found {len(code_analysis.get('routes', []))} routes")
+
+        # 3. Security audit via AI
+        security_audit = await audit_security(code_analysis)
+        logger.info(f"Security audit completed")
+
+        # 4. Merge results
+        merged_routes = merge_analysis_and_audit(code_analysis, security_audit)
+
+        # 5. Delete old routes and insert new ones
+        await db.discovered_routes.delete_many({"project_id": ObjectId(project_id)})
+
+        now = datetime.now(timezone.utc).isoformat()
+        for route in merged_routes:
+            route["project_id"] = ObjectId(project_id)
+            route["created_at"] = now
+
+        if merged_routes:
+            await db.discovered_routes.insert_many(merged_routes)
+
+        # 6. Calculate breakdown
+        breakdown = {"green": 0, "yellow": 0, "red": 0}
+        for r in merged_routes:
+            risk = r.get("risk", "yellow")
+            if risk in breakdown:
+                breakdown[risk] += 1
+
+        # 7. Update project status and login endpoint
+        update_fields = {
+            "status": "configuring",
+            "endpoint_count": len(merged_routes),
+            "updated_at": now,
+        }
+        auth_strategy = code_analysis.get("authStrategy", {})
+        if auth_strategy.get("loginEndpoint"):
+            update_fields["login_endpoint"] = auth_strategy["loginEndpoint"]
+
+        await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": update_fields})
+
+        return {
+            "routeCount": len(merged_routes),
+            "breakdown": breakdown,
+            "projectId": project_id,
+        }
+
+    except Exception as e:
+        logger.error(f"Scan failed: {e}")
+        await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "draft"}})
+        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
 @api_router.get("/projects/{project_id}/routes")
 async def get_project_routes(project_id: str, user: dict = Depends(get_current_user)):
-    raise HTTPException(status_code=501, detail="Not implemented yet — coming in Phase 2")
+    # Verify ownership
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Fetch routes sorted by risk (green first, then yellow, then red)
+    routes = await db.discovered_routes.find(
+        {"project_id": ObjectId(project_id)}, {"_id": 0, "project_id": 0}
+    ).to_list(500)
+
+    risk_order = {"green": 0, "yellow": 1, "red": 2}
+    routes.sort(key=lambda r: (risk_order.get(r.get("risk", "yellow"), 1), r.get("path", "")))
+
+    return routes
 
 @api_router.post("/projects/{project_id}/endpoints")
 async def create_endpoints(project_id: str, user: dict = Depends(get_current_user)):

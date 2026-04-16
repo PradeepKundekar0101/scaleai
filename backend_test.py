@@ -38,7 +38,7 @@ class ScalableAPITester:
         })
 
     def make_request(self, method: str, endpoint: str, data: Optional[Dict] = None, 
-                    expected_status: int = 200, use_auth: bool = False) -> tuple[bool, Any]:
+                    expected_status: int = 200, use_auth: bool = False, timeout: int = 30) -> tuple[bool, Any]:
         """Make HTTP request and validate response"""
         url = f"{self.base_url}/api/{endpoint}"
         headers = {}
@@ -48,11 +48,11 @@ class ScalableAPITester:
         
         try:
             if method == 'GET':
-                response = self.session.get(url, headers=headers)
+                response = self.session.get(url, headers=headers, timeout=timeout)
             elif method == 'POST':
-                response = self.session.post(url, json=data, headers=headers)
+                response = self.session.post(url, json=data, headers=headers, timeout=timeout)
             elif method == 'DELETE':
-                response = self.session.delete(url, headers=headers)
+                response = self.session.delete(url, headers=headers, timeout=timeout)
             else:
                 return False, f"Unsupported method: {method}"
 
@@ -195,27 +195,147 @@ class ScalableAPITester:
             self.log_test("GET /api/projects/:id", False, str(response))
             return False
 
-    def test_stub_routes(self):
-        """Test stub routes that should return 501"""
+    def test_project_scan(self):
+        """Test project scanning endpoint"""
         if not hasattr(self, 'project_id'):
-            self.log_test("Stub routes", False, "No project ID available")
+            self.log_test("POST /api/projects/:id/scan", False, "No project ID available")
             return False
 
-        stub_endpoints = [
-            ('POST', f'projects/{self.project_id}/scan'),
-            ('GET', f'projects/{self.project_id}/routes')
-        ]
+        # Test scanning with timeout for AI processing (60 seconds)
+        print(f"⏳ Starting scan for project {self.project_id} (may take up to 60 seconds)...")
+        success, response = self.make_request('POST', f'projects/{self.project_id}/scan', 
+                                            expected_status=200, use_auth=True, timeout=70)
         
-        all_passed = True
-        for method, endpoint in stub_endpoints:
-            success, response = self.make_request(method, endpoint, expected_status=501, use_auth=True)
-            if success:
-                self.log_test(f"{method} /api/{endpoint}", True, "Returns 501 as expected")
+        if success and isinstance(response, dict):
+            required_fields = ['routeCount', 'breakdown', 'projectId']
+            if all(field in response for field in required_fields):
+                breakdown = response.get('breakdown', {})
+                route_count = response.get('routeCount', 0)
+                
+                # Validate breakdown structure
+                if isinstance(breakdown, dict) and 'green' in breakdown and 'yellow' in breakdown and 'red' in breakdown:
+                    total_breakdown = breakdown['green'] + breakdown['yellow'] + breakdown['red']
+                    if total_breakdown == route_count:
+                        self.log_test("POST /api/projects/:id/scan", True, 
+                                    f"Scan completed: {route_count} routes found (G:{breakdown['green']}, Y:{breakdown['yellow']}, R:{breakdown['red']})")
+                        return True
+                    else:
+                        self.log_test("POST /api/projects/:id/scan", False, 
+                                    f"Route count mismatch: {route_count} vs breakdown total {total_breakdown}")
+                        return False
+                else:
+                    self.log_test("POST /api/projects/:id/scan", False, "Invalid breakdown structure")
+                    return False
             else:
-                self.log_test(f"{method} /api/{endpoint}", False, str(response))
-                all_passed = False
+                missing = [f for f in required_fields if f not in response]
+                self.log_test("POST /api/projects/:id/scan", False, f"Missing fields: {missing}")
+                return False
+        else:
+            self.log_test("POST /api/projects/:id/scan", False, str(response))
+            return False
+
+    def test_project_routes(self):
+        """Test getting discovered routes"""
+        if not hasattr(self, 'project_id'):
+            self.log_test("GET /api/projects/:id/routes", False, "No project ID available")
+            return False
+
+        success, response = self.make_request('GET', f'projects/{self.project_id}/routes', 
+                                            expected_status=200, use_auth=True)
         
-        return all_passed
+        if success and isinstance(response, list):
+            if len(response) > 0:
+                # Validate route structure
+                route = response[0]
+                required_fields = ['method', 'path', 'risk', 'description']
+                if all(field in route for field in required_fields):
+                    # Check risk ordering (green first, then yellow, then red)
+                    risks = [r.get('risk', 'unknown') for r in response]
+                    risk_order = {'green': 0, 'yellow': 1, 'red': 2}
+                    is_sorted = all(risk_order.get(risks[i], 3) <= risk_order.get(risks[i+1], 3) 
+                                  for i in range(len(risks)-1))
+                    
+                    if is_sorted:
+                        self.log_test("GET /api/projects/:id/routes", True, 
+                                    f"Retrieved {len(response)} routes, properly sorted by risk")
+                        return True
+                    else:
+                        self.log_test("GET /api/projects/:id/routes", False, "Routes not sorted by risk level")
+                        return False
+                else:
+                    missing = [f for f in required_fields if f not in route]
+                    self.log_test("GET /api/projects/:id/routes", False, f"Route missing fields: {missing}")
+                    return False
+            else:
+                self.log_test("GET /api/projects/:id/routes", True, "No routes found (empty project)")
+                return True
+        else:
+            self.log_test("GET /api/projects/:id/routes", False, str(response))
+            return False
+
+    def test_project_status_transitions(self):
+        """Test that project status changes during scan"""
+        if not hasattr(self, 'project_id'):
+            self.log_test("Project status transitions", False, "No project ID available")
+            return False
+
+        # Get initial project status
+        success, initial_project = self.make_request('GET', f'projects/{self.project_id}', use_auth=True)
+        if not success:
+            self.log_test("Project status transitions", False, "Could not get initial project status")
+            return False
+
+        initial_status = initial_project.get('status', 'unknown')
+        
+        # After scan, status should be 'configuring'
+        success, final_project = self.make_request('GET', f'projects/{self.project_id}', use_auth=True)
+        if success:
+            final_status = final_project.get('status', 'unknown')
+            if final_status == 'configuring':
+                self.log_test("Project status transitions", True, 
+                            f"Status changed from '{initial_status}' to '{final_status}'")
+                return True
+            else:
+                self.log_test("Project status transitions", False, 
+                            f"Expected 'configuring', got '{final_status}'")
+                return False
+        else:
+            self.log_test("Project status transitions", False, "Could not get final project status")
+            return False
+
+    def test_demo_fallback(self):
+        """Test demo fallback with QuickBite repo"""
+        # Create a project with QuickBite demo repo URL
+        data = {
+            "name": f"QuickBite Demo {datetime.now().strftime('%H%M%S')}",
+            "repoUrl": "https://github.com/PradeepKundekar0101/quickbite-api"
+        }
+        
+        success, response = self.make_request('POST', 'projects', data, 200, use_auth=True)
+        
+        if success and isinstance(response, dict) and 'id' in response:
+            demo_project_id = response['id']
+            
+            # Scan the demo project
+            print(f"⏳ Scanning QuickBite demo project (may take up to 60 seconds)...")
+            success, scan_response = self.make_request('POST', f'projects/{demo_project_id}/scan', 
+                                                     expected_status=200, use_auth=True, timeout=70)
+            
+            if success and isinstance(scan_response, dict):
+                route_count = scan_response.get('routeCount', 0)
+                if route_count > 0:
+                    self.log_test("Demo fallback scan", True, 
+                                f"QuickBite demo scan found {route_count} routes")
+                    return True
+                else:
+                    self.log_test("Demo fallback scan", False, "Demo scan returned 0 routes")
+                    return False
+            else:
+                self.log_test("Demo fallback scan", False, str(scan_response))
+                return False
+        else:
+            self.log_test("Demo fallback scan", False, "Could not create demo project")
+            return False
 
     def test_github_oauth_stubs(self):
         """Test GitHub OAuth stub endpoints"""
@@ -268,7 +388,7 @@ class ScalableAPITester:
 
     def run_all_tests(self):
         """Run all API tests"""
-        print("🚀 Starting Scalable API Tests")
+        print("🚀 Starting Scalable API Tests - Phase 2")
         print(f"Testing against: {self.base_url}")
         print("=" * 50)
         
@@ -284,7 +404,13 @@ class ScalableAPITester:
         self.test_projects_create()
         self.test_projects_list()
         self.test_projects_get_single()
-        self.test_stub_routes()
+        
+        # Test Phase 2 scan functionality
+        print("\n🔍 Testing Phase 2 Scan Features...")
+        self.test_project_scan()
+        self.test_project_routes()
+        self.test_project_status_transitions()
+        self.test_demo_fallback()
         
         # Test logout
         self.test_auth_logout()

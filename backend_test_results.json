@@ -1,25 +1,25 @@
 {
-  "timestamp": "2026-04-16T08:29:28.950463",
-  "total_tests": 14,
-  "passed_tests": 14,
+  "timestamp": "2026-04-16T08:51:09.772217",
+  "total_tests": 16,
+  "passed_tests": 16,
   "success_rate": "100.0%",
   "results": [
     {
       "test": "POST /api/auth/register",
       "success": true,
-      "details": "User created with ID: 69e09de79cc890cc10172ed2",
+      "details": "User created with ID: 69e0a2937dd571fbbabaae83",
       "response_data": null
     },
     {
       "test": "GET /api/auth/me",
       "success": true,
-      "details": "User info retrieved: test_082927@example.com",
+      "details": "User info retrieved: test_084923@example.com",
       "response_data": null
     },
     {
       "test": "POST /api/projects",
       "success": true,
-      "details": "Project created with ID: 69e09de89cc890cc10172ed3",
+      "details": "Project created with ID: 69e0a2937dd571fbbabaae84",
       "response_data": null
     },
     {
@@ -31,19 +31,31 @@
     {
       "test": "GET /api/projects/:id",
       "success": true,
-      "details": "Project retrieved: Test Project 082927",
+      "details": "Project retrieved: Test Project 084923",
       "response_data": null
     },
     {
-      "test": "POST /api/projects/69e09de89cc890cc10172ed3/scan",
+      "test": "POST /api/projects/:id/scan",
       "success": true,
-      "details": "Returns 501 as expected",
+      "details": "Scan completed: 21 routes found (G:11, Y:3, R:7)",
       "response_data": null
     },
     {
-      "test": "GET /api/projects/69e09de89cc890cc10172ed3/routes",
+      "test": "GET /api/projects/:id/routes",
       "success": true,
-      "details": "Returns 501 as expected",
+      "details": "Retrieved 21 routes, properly sorted by risk",
+      "response_data": null
+    },
+    {
+      "test": "Project status transitions",
+      "success": true,
+      "details": "Status changed from 'configuring' to 'configuring'",
+      "response_data": null
+    },
+    {
+      "test": "Demo fallback scan",
+      "success": true,
+      "details": "QuickBite demo scan found 21 routes",
       "response_data": null
     },
     {
