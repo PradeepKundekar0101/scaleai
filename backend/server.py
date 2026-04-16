@@ -452,7 +452,11 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
 
 
 @api_router.get("/projects/{project_id}/scan/stream")
-async def scan_project_stream(project_id: str, user: dict = Depends(get_current_user)):
+async def scan_project_stream(
+    project_id: str, 
+    token: str = None,
+    user: dict = Depends(get_current_user)
+):
     """Streaming scan endpoint with ReAct pattern updates"""
     from fastapi.responses import StreamingResponse
     from github_service import fetch_github_files
