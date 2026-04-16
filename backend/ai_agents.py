@@ -295,6 +295,30 @@ Requirements:
 
 Return ONLY TypeScript code. No markdown, no code blocks, no explanation. Just raw .ts file contents starting with import statements."""
 
+SDK_DOCS_GENERATOR_PROMPT = """You are a technical documentation writer. Generate comprehensive SDK usage documentation in Markdown format.
+
+The documentation should include:
+
+1. **Installation** - npm/yarn install command with the package name
+2. **Quick Start** - Initialize the client with API key
+3. **Authentication** - How to get and use API keys
+4. **Usage Examples** - For each major resource/endpoint group, provide:
+   - List all items
+   - Get single item by ID
+   - Create new item
+   - Update item
+   - Delete item (if applicable)
+5. **Error Handling** - How to catch and handle SDK errors
+6. **TypeScript Support** - Mention type safety and autocomplete
+7. **Rate Limits** - Explain rate limiting headers
+8. **Support** - Link to API documentation
+
+Use the actual endpoint paths and methods provided. Make examples realistic and actionable.
+Package name format: @scalableai/{projectSlug}
+Gateway URL: {gatewayBaseUrl}
+
+Return ONLY Markdown. No code blocks around the entire response, just the markdown content itself."""
+
 
 async def generate_openapi_spec_ai(project_name: str, gateway_url: str, endpoints: list) -> dict:
     """Generate OpenAPI 3.0 spec using Claude AI in a subprocess with hard timeout."""
@@ -393,6 +417,57 @@ asyncio.run(run())
         return None
     except Exception as e:
         logger.error(f"AI SDK generation failed: {e}")
+        return None
+
+
+
+async def generate_sdk_docs_ai(project_name: str, project_slug: str, gateway_url: str, endpoints: list) -> str:
+    """Generate SDK usage documentation using Claude AI in a subprocess with hard timeout."""
+    import subprocess
+    import tempfile
+    ep_json = json.dumps(endpoints)
+    script = f'''
+import os, json, sys, asyncio
+os.environ["OPENAI_MAX_RETRIES"] = "0"
+os.environ["OPENAI_TIMEOUT"] = "25"
+sys.path.insert(0, "/app/backend")
+from ai_agents import call_claude_text, SDK_DOCS_GENERATOR_PROMPT
+prompt = SDK_DOCS_GENERATOR_PROMPT.replace("{{projectSlug}}", {repr(project_slug)}).replace("{{gatewayBaseUrl}}", {repr(gateway_url)})
+eps = {repr(ep_json)}
+user_msg = f"""Generate comprehensive SDK usage documentation for the "{repr(project_name)}" API.\\nPackage: @scalableai/{repr(project_slug)}\\nGateway URL: {repr(gateway_url)}\\nEndpoints:\\n{{eps}}\\nProvide clear installation instructions, authentication setup, and usage examples for all endpoint groups."""
+async def run():
+    result = await call_claude_text(prompt, user_msg)
+    print(result)
+asyncio.run(run())
+'''
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False, dir='/tmp') as f:
+            f.write(script)
+            script_path = f.name
+
+        result = subprocess.run(
+            ["python3", script_path],
+            capture_output=True, text=True, timeout=40,
+            env={**os.environ, "OPENAI_MAX_RETRIES": "0", "OPENAI_TIMEOUT": "25"}
+        )
+        os.unlink(script_path)
+
+        if result.returncode == 0 and result.stdout.strip():
+            docs = result.stdout.strip()
+            if len(docs) > 100 and ("##" in docs or "npm install" in docs):
+                logger.info(f"AI generated SDK docs ({len(docs)} chars)")
+                return docs
+        logger.warning(f"AI SDK docs subprocess failed: {result.stderr[-200:] if result.stderr else 'no output'}")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("AI SDK docs generation timed out (40s hard kill)")
+        try:
+            os.unlink(script_path)
+        except Exception:
+            pass
+        return None
+    except Exception as e:
+        logger.error(f"AI SDK docs generation failed: {e}")
         return None
 
 

@@ -791,7 +791,7 @@ async def get_deploy_status(project_id: str, user: dict = Depends(get_current_us
 async def _run_deploy_background(project_id, slug, project_name, gateway_base_url, gateway_fallback_url, ep_list, endpoints, total_stripped):
     """Background task that runs the full deploy pipeline."""
     import hashlib
-    from ai_agents import generate_openapi_spec_ai, generate_sdk_ai
+    from ai_agents import generate_openapi_spec_ai, generate_sdk_ai, generate_sdk_docs_ai
     from npm_publisher import publish_sdk_to_npm
 
     pid = ObjectId(project_id)
@@ -817,6 +817,13 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
         if not sdk_code:
             logger.info("AI SDK failed, using programmatic fallback")
             sdk_code = _build_programmatic_sdk(gateway_base_url, ep_list)
+        
+        # Step 2.5: Generate SDK Documentation
+        logger.info("Generating SDK documentation via AI...")
+        sdk_docs = await generate_sdk_docs_ai(project_name, slug, gateway_base_url, ep_list)
+        if not sdk_docs:
+            logger.info("AI SDK docs failed, using basic template")
+            sdk_docs = _build_basic_sdk_docs(project_name, slug, gateway_base_url)
 
         # Step 3: Generate API key
         await update_step("createKey")
@@ -857,6 +864,7 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
             {"$set": {
                 "open_api_spec": openapi_spec,
                 "sdk_code": sdk_code,
+                "sdk_docs": sdk_docs,
                 "default_api_key": raw_key,
                 "npm_package_name": npm_package_name,
                 "npm_version": npm_version,
@@ -877,6 +885,122 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
             {"_id": pid},
             {"$set": {"deploy_error": str(e), "status": "configuring"}}
         )
+
+
+def _build_basic_sdk_docs(project_name: str, slug: str, gateway_url: str) -> str:
+    """Basic SDK documentation (fallback when AI fails)."""
+    return f"""# {project_name} SDK Documentation
+
+## Installation
+
+```bash
+npm install @scalableai/{slug}
+# or
+yarn add @scalableai/{slug}
+```
+
+## Quick Start
+
+```typescript
+import {{ ScalableClient }} from '@scalableai/{slug}';
+
+const client = new ScalableClient({{
+  apiKey: 'YOUR_API_KEY',
+  baseUrl: '{gateway_url}' // optional, defaults to this
+}});
+```
+
+## Authentication
+
+Get your API key from the Scalable dashboard. Pass it when initializing the client:
+
+```typescript
+const client = new ScalableClient({{
+  apiKey: process.env.SCALABLE_API_KEY
+}});
+```
+
+## Usage Examples
+
+### Making API Calls
+
+The SDK automatically:
+- Sets the `X-API-Key` header
+- Handles errors and throws `ScalableError`
+- Provides TypeScript types for all requests/responses
+
+```typescript
+try {{
+  const result = await client.someResource.someMethod();
+  console.log(result);
+}} catch (error) {{
+  if (error instanceof ScalableError) {{
+    console.error('API Error:', error.message, error.statusCode);
+  }}
+}}
+```
+
+## Error Handling
+
+All SDK methods throw `ScalableError` with:
+- `statusCode`: HTTP status code
+- `errorCode`: API error code (if available)
+- `message`: Human-readable error message
+
+```typescript
+import {{ ScalableClient, ScalableError }} from '@scalableai/{slug}';
+
+try {{
+  await client.someResource.get('id');
+}} catch (error) {{
+  if (error instanceof ScalableError) {{
+    switch (error.statusCode) {{
+      case 401:
+        console.error('Invalid API key');
+        break;
+      case 404:
+        console.error('Resource not found');
+        break;
+      case 429:
+        console.error('Rate limit exceeded');
+        break;
+      default:
+        console.error('API error:', error.message);
+    }}
+  }}
+}}
+```
+
+## TypeScript Support
+
+The SDK is written in TypeScript and provides full type safety:
+
+```typescript
+// Autocomplete works everywhere
+const orders = await client.orders.list();
+//    ^? Order[]
+
+// Type-safe parameters
+await client.orders.create({{
+  // Your IDE will show you all available fields
+}});
+```
+
+## Rate Limits
+
+API responses include rate limit headers:
+- `X-RateLimit-Limit`: Maximum requests per minute
+- `X-RateLimit-Remaining`: Remaining requests in current window
+
+The SDK does not automatically retry on rate limits. Handle 429 errors in your code.
+
+## Support
+
+- **API Documentation**: Visit the docs page for complete endpoint reference
+- **SDK Issues**: Check the package repository
+- **API Keys**: Manage keys in the Scalable dashboard
+"""
+
 
 
 def _build_programmatic_openapi(project_name: str, gateway_base_url: str, ep_list: list) -> dict:
