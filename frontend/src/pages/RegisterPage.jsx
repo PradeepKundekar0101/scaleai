@@ -27,19 +27,23 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-white flex">
-      {/* Left: Decorative */}
-      <div className="hidden lg:flex flex-1 bg-[#1b1938] items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-1/3 right-1/3 w-72 h-72 bg-[#cbb7fb]/25 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/4 left-1/4 w-56 h-56 bg-[#714cb6]/20 rounded-full blur-3xl" />
-        </div>
-        <div className="relative text-center px-12">
-          <h2 className="text-4xl font-semibold text-white/95 leading-[0.96] tracking-tight mb-4">
-            Start building<br />your platform
-          </h2>
-          <p className="text-white/60 text-base max-w-sm mx-auto leading-relaxed">
-            Connect, configure, deploy — all in minutes
-          </p>
+      {/* Left: Image */}
+      <div className="hidden lg:block flex-1 relative overflow-hidden">
+        <img
+          src="/img1.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#1b1938]/40 via-transparent to-[#1b1938]/30" />
+        <div className="absolute bottom-0 left-0 right-0 p-10">
+          <div className="backdrop-blur-md bg-black/20 border border-white/10 rounded-2xl p-6 max-w-sm">
+            <h2 className="text-2xl font-semibold text-white leading-tight tracking-tight mb-2">
+              Start building<br />your platform
+            </h2>
+            <p className="text-white/70 text-sm leading-relaxed">
+              Connect, configure, deploy — all in minutes
+            </p>
+          </div>
         </div>
       </div>
 
