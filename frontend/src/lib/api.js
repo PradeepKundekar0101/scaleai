@@ -17,13 +17,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect on 401
+// Redirect on 401 (skip public pages like /docs)
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem("scalable_token");
-      if (window.location.pathname !== "/login" && window.location.pathname !== "/register") {
+      const path = window.location.pathname;
+      if (path !== "/login" && path !== "/register" && !path.startsWith("/docs/")) {
         window.location.href = "/login";
       }
     }

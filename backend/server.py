@@ -378,7 +378,7 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
 
         # 3. Security audit via AI
         security_audit = await audit_security(code_analysis)
-        logger.info(f"Security audit completed")
+        logger.info("Security audit completed")
 
         # 4. Merge results
         merged_routes = merge_analysis_and_audit(code_analysis, security_audit)
@@ -795,12 +795,13 @@ async def deploy_project(project_id: str, request: Request, user: dict = Depends
         "created_at": now,
     })
 
-    # Update project to live
+    # Update project to live (store raw default key for docs "Try It" feature)
     await db.projects.update_one(
         {"_id": ObjectId(project_id)},
         {"$set": {
             "open_api_spec": openapi_spec,
             "sdk_code": sdk_code,
+            "default_api_key": raw_key,
             "status": "live",
             "updated_at": now,
         }}
@@ -923,6 +924,53 @@ async def get_spec(slug: str):
         raise HTTPException(status_code=404, detail="OpenAPI spec not generated yet. Deploy the project first.")
     return spec
 
+@api_router.get("/projects/{slug}/docs-config")
+async def get_docs_config(slug: str):
+    """Public endpoint — returns everything the docs page needs."""
+    project = await db.projects.find_one({"slug": slug})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.get("status") != "live":
+        raise HTTPException(status_code=404, detail="Project is not deployed yet.")
+
+    spec = project.get("open_api_spec")
+    if not spec:
+        raise HTTPException(status_code=404, detail="OpenAPI spec not generated yet.")
+
+    project_id = project["_id"]
+
+    # Get exposed endpoints with fieldsToStrip info
+    endpoints = await db.exposed_endpoints.find(
+        {"project_id": project_id, "is_active": True}, {"_id": 0, "project_id": 0}
+    ).to_list(500)
+
+    ep_list = []
+    for ep in endpoints:
+        ep_list.append({
+            "method": ep.get("method", ""),
+            "path": ep.get("path", ""),
+            "description": ep.get("description", ""),
+            "fieldsToStrip": ep.get("fields_to_strip", []),
+            "rateLimit": ep.get("rate_limit", 100),
+        })
+
+    # Build gateway URL
+    frontend_url = os.environ.get("FRONTEND_URL", os.environ.get("CORS_ORIGINS", ""))
+    if frontend_url and frontend_url != "*":
+        first_origin = frontend_url.split(",")[0].strip()
+    else:
+        first_origin = ""
+    gateway_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    return {
+        "projectName": project.get("name", ""),
+        "slug": slug,
+        "gatewayUrl": gateway_url,
+        "defaultApiKey": project.get("default_api_key", ""),
+        "spec": spec,
+        "endpoints": ep_list,
+    }
+
 # ── Include router ───────────────────────────────────────
 
 app.include_router(api_router)
@@ -988,10 +1036,10 @@ async def startup():
     # Write test credentials
     os.makedirs("/app/memory", exist_ok=True)
     with open("/app/memory/test_credentials.md", "w") as f:
-        f.write(f"# Test Credentials\n\n")
+        f.write("# Test Credentials\n\n")
         f.write(f"## Admin\n- Email: {admin_email}\n- Password: {admin_password}\n\n")
-        f.write(f"## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n- POST /api/auth/logout\n- POST /api/auth/refresh\n\n")
-        f.write(f"## Project Endpoints\n- POST /api/projects\n- GET /api/projects\n- GET /api/projects/:id\n")
+        f.write("## Auth Endpoints\n- POST /api/auth/register\n- POST /api/auth/login\n- GET /api/auth/me\n- POST /api/auth/logout\n- POST /api/auth/refresh\n\n")
+        f.write("## Project Endpoints\n- POST /api/projects\n- GET /api/projects\n- GET /api/projects/:id\n")
 
     logger.info("Startup complete")
 

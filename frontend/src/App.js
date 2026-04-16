@@ -8,6 +8,8 @@ import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ConnectPage from "@/pages/ConnectPage";
 import EndpointsPage from "@/pages/EndpointsPage";
+import KeysPage from "@/pages/KeysPage";
+import DocsPage from "@/pages/DocsPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 
 function App() {
@@ -31,9 +33,9 @@ function App() {
           <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/connect" element={<ProtectedRoute><ConnectPage /></ProtectedRoute>} />
           <Route path="/endpoints/:projectId" element={<ProtectedRoute><EndpointsPage /></ProtectedRoute>} />
-          <Route path="/keys" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
-          <Route path="/docs" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
+          <Route path="/keys/:projectId" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
+          <Route path="/docs/:slug" element={<DocsPage />} />
+          <Route path="/analytics/:projectId" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
         </Routes>
       </AuthProvider>

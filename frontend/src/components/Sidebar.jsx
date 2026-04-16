@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutGrid, path: "/" },
-  { label: "Connect", icon: Link2, path: "/connect" },
-  { label: "API Keys", icon: Key, path: "/keys" },
-  { label: "Docs", icon: BookOpen, path: "/docs" },
-  { label: "Analytics", icon: BarChart3, path: "/analytics" },
-  { label: "Settings", icon: Settings, path: "/settings" },
+  { label: "Dashboard", icon: LayoutGrid, path: "/", exact: true },
+  { label: "Connect", icon: Link2, path: "/connect", exact: true },
+  { label: "API Keys", icon: Key, path: "/keys", exact: false },
+  { label: "Docs", icon: BookOpen, path: "/docs", exact: false },
+  { label: "Analytics", icon: BarChart3, path: "/analytics", exact: false },
+  { label: "Settings", icon: Settings, path: "/settings", exact: true },
 ];
 
 export default function Sidebar() {
@@ -40,7 +40,7 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 py-3 px-3 space-y-0.5" data-testid="sidebar-nav">
         {navItems.map((item) => {
-          const isActive = pathname === item.path;
+          const isActive = item.exact ? pathname === item.path : pathname === item.path || pathname.startsWith(item.path + "/");
           return (
             <Link
               key={item.path}

@@ -517,7 +517,7 @@ export default function EndpointsPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(`/keys`)}
+                  onClick={() => navigate(`/keys/${projectId}`)}
                   data-testid="deploy-manage-keys-btn"
                   className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm text-sm"
                 >
@@ -525,7 +525,7 @@ export default function EndpointsPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => navigate(`/analytics`)}
+                  onClick={() => navigate(`/analytics/${projectId}`)}
                   data-testid="deploy-view-analytics-btn"
                   className="border-[#27272A] text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] rounded-sm text-sm"
                 >
