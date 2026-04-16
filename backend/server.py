@@ -144,14 +144,13 @@ class ProjectCreateInput(BaseModel):
 app = FastAPI(title="Scalable API", docs_url="/api/docs", openapi_url="/api/openapi.json")
 
 # CORS - must be before routes
-frontend_url = os.environ.get('FRONTEND_URL', os.environ.get('CORS_ORIGINS', '*'))
-origins = [o.strip() for o in frontend_url.split(',')]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 api_router = APIRouter(prefix="/api")
