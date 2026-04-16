@@ -495,11 +495,21 @@ async def scan_project_stream(
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Verify token
+    # Verify token (inline decode — can't use Depends for EventSource)
     try:
-        user = verify_token(token)
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid token")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user_doc = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="User not found")
+        user = serialize_user(user_doc)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
