@@ -67,7 +67,11 @@ function ProjectCard({ project }) {
         )}
       </div>
       <p className="font-mono text-xs text-[#3F3F46] truncate mb-4" data-testid={`project-slug-${project.id}`}>
-        {isLive ? `${process.env.REACT_APP_BACKEND_URL}/api/gateway/${project.slug}` : `gateway.scalable.dev/${project.slug}`}
+        {isLive
+          ? (process.env.REACT_APP_GATEWAY_DOMAIN
+              ? `${project.slug}.${process.env.REACT_APP_GATEWAY_DOMAIN}`
+              : `${process.env.REACT_APP_BACKEND_URL}/api/gateway/${project.slug}`)
+          : `${project.slug}.${process.env.REACT_APP_GATEWAY_DOMAIN || 'gateway.usescale.ai'}`}
       </p>
       <div className="flex items-center text-[#2563EB] text-sm font-medium group-hover:gap-2 transition-all duration-150">
         Manage <ArrowRight className="w-3.5 h-3.5 ml-1" />

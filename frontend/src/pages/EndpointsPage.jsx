@@ -510,15 +510,20 @@ export default function EndpointsPage() {
             </div>
 
             <div className="space-y-5">
-              {/* Gateway URL */}
+              {/* Gateway URL (Subdomain) */}
               <div>
                 <label className="text-[#A1A1AA] text-xs uppercase tracking-wider block mb-1.5">API Base URL</label>
                 <div className="flex items-center gap-2 bg-[#09090B] border border-[#27272A] rounded-sm px-3 py-2.5">
-                  <code className="font-mono text-sm text-[#FAFAFA] flex-1 truncate" data-testid="deploy-gateway-url">{deployResult.gatewayUrl}</code>
-                  <button onClick={() => copyToClipboard(deployResult.gatewayUrl, "gateway")} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="copy-gateway-url">
+                  <code className="font-mono text-sm text-[#FAFAFA] flex-1 truncate" data-testid="deploy-gateway-url">{deployResult.gatewaySubdomain || deployResult.gatewayUrl}</code>
+                  <button onClick={() => copyToClipboard(deployResult.gatewaySubdomain || deployResult.gatewayUrl, "gateway")} className="p-1 text-[#71717A] hover:text-[#FAFAFA] transition-colors" data-testid="copy-gateway-url">
                     {copied.gateway ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
+                {deployResult.gatewayFallback && deployResult.gatewaySubdomain && (
+                  <p className="text-xs text-[#71717A] mt-1.5">
+                    Fallback: <code className="font-mono text-[#A1A1AA]">{deployResult.gatewayFallback}</code>
+                  </p>
+                )}
               </div>
 
               {/* Docs URL */}

@@ -693,13 +693,22 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     slug = project.get("slug", "")
     project_name = project.get("name", "Project")
 
-    # Build gateway URL
+    # Build gateway URLs (subdomain + path-based fallback)
+    gateway_domain = os.environ.get("GATEWAY_DOMAIN", "")
     app_url = os.environ.get("APP_URL", os.environ.get("FRONTEND_URL", os.environ.get("CORS_ORIGINS", "")))
     if app_url and app_url != "*":
         first_origin = app_url.split(",")[0].strip()
     else:
         first_origin = ""
-    gateway_base_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    # Primary: subdomain URL (e.g., quickbite.gateway.usescale.ai)
+    if gateway_domain:
+        gateway_base_url = f"https://{slug}.{gateway_domain}"
+    else:
+        gateway_base_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    # Fallback: path-based URL (always works in Emergent preview)
+    gateway_fallback_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
 
     # Prepare endpoint list
     ep_list = []
@@ -730,7 +739,7 @@ async def deploy_project(project_id: str, request: Request, background_tasks: Ba
     # Run the actual deploy in background
     background_tasks.add_task(
         _run_deploy_background,
-        project_id, slug, project_name, gateway_base_url, ep_list, endpoints, total_stripped
+        project_id, slug, project_name, gateway_base_url, gateway_fallback_url, ep_list, endpoints, total_stripped
     )
 
     return {"status": "deploying", "message": "Deploy started"}
@@ -752,11 +761,17 @@ async def get_deploy_status(project_id: str, user: dict = Depends(get_current_us
 
     if status == "live":
         # Deploy completed — return full result
+        gateway_domain = os.environ.get("GATEWAY_DOMAIN", "")
+        slug = project.get("slug", "")
+        subdomain_url = f"https://{slug}.{gateway_domain}" if gateway_domain else ""
+
         return {
             "status": "live",
             "deployStep": "complete",
             "gatewayUrl": project.get("gateway_url", ""),
-            "docsUrl": f"/docs/{project.get('slug', '')}",
+            "gatewaySubdomain": subdomain_url,
+            "gatewayFallback": project.get("gateway_fallback_url", ""),
+            "docsUrl": f"/docs/{slug}",
             "sdkInstall": f"npm install {project.get('npm_package_name', '')}",
             "npmPackage": project.get("npm_package_name", ""),
             "npmVersion": project.get("npm_version", ""),
@@ -773,7 +788,7 @@ async def get_deploy_status(project_id: str, user: dict = Depends(get_current_us
         return {"status": status, "deployStep": "", "error": None}
 
 
-async def _run_deploy_background(project_id, slug, project_name, gateway_base_url, ep_list, endpoints, total_stripped):
+async def _run_deploy_background(project_id, slug, project_name, gateway_base_url, gateway_fallback_url, ep_list, endpoints, total_stripped):
     """Background task that runs the full deploy pipeline."""
     import hashlib
     from ai_agents import generate_openapi_spec_ai, generate_sdk_ai
@@ -847,6 +862,7 @@ async def _run_deploy_background(project_id, slug, project_name, gateway_base_ur
                 "npm_version": npm_version,
                 "npm_published": npm_published,
                 "gateway_url": gateway_base_url,
+                "gateway_fallback_url": gateway_fallback_url,
                 "status": "live",
                 "deploy_step": "complete",
                 "deploy_error": None,
@@ -1186,18 +1202,27 @@ async def get_docs_config(slug: str):
             "rateLimit": ep.get("rate_limit", 100),
         })
 
-    # Build gateway URL
+    # Build gateway URLs
+    gateway_domain = os.environ.get("GATEWAY_DOMAIN", "")
     frontend_url = os.environ.get("FRONTEND_URL", os.environ.get("CORS_ORIGINS", ""))
     if frontend_url and frontend_url != "*":
         first_origin = frontend_url.split(",")[0].strip()
     else:
         first_origin = ""
-    gateway_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    if gateway_domain:
+        gateway_url = f"https://{slug}.{gateway_domain}"
+    else:
+        gateway_url = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
+
+    gateway_fallback = f"{first_origin}/api/gateway/{slug}" if first_origin else f"/api/gateway/{slug}"
 
     return {
         "projectName": project.get("name") or slug,
         "slug": slug,
         "gatewayUrl": gateway_url,
+        "gatewayFallback": gateway_fallback,
+        "gatewayDomain": gateway_domain,
         "defaultApiKey": project.get("default_api_key", ""),
         "spec": spec,
         "endpoints": ep_list,
@@ -1211,6 +1236,7 @@ app.include_router(api_router)
 
 from fastapi.responses import JSONResponse
 
+# Path-based gateway: /api/gateway/{slug}/{path}
 @app.api_route("/api/gateway/{project_slug}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def gateway_route(project_slug: str, path: str, request: Request):
     from gateway import gateway_handler
@@ -1223,7 +1249,56 @@ async def gateway_route(project_slug: str, path: str, request: Request):
         resp.headers[k] = v
     resp.headers["X-Powered-By"] = "Scalable"
     resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
     return resp
+
+
+# ── Subdomain-based gateway middleware ─────────────────────
+# When deployed with wildcard DNS (*.gateway.usescale.ai),
+# requests to quickbite.gateway.usescale.ai/* are routed here.
+
+@app.middleware("http")
+async def subdomain_gateway_middleware(request: Request, call_next):
+    """
+    Detect subdomain gateway requests.
+    If Host = {slug}.gateway.usescale.ai, rewrite to /api/gateway/{slug}/{path}
+    """
+    gateway_domain = os.environ.get("GATEWAY_DOMAIN", "")
+    if not gateway_domain:
+        return await call_next(request)
+
+    host = request.headers.get("host", "").split(":")[0]  # strip port
+
+    # Check if this is a subdomain of the gateway domain
+    if host.endswith(f".{gateway_domain}") and host != gateway_domain:
+        slug = host.replace(f".{gateway_domain}", "").split(".")[0]
+        path = request.url.path.lstrip("/")
+
+        # Handle CORS preflight for subdomain requests
+        if request.method == "OPTIONS":
+            resp = JSONResponse(status_code=204, content=None)
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+            resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
+            resp.headers["Access-Control-Max-Age"] = "86400"
+            return resp
+
+        # Route through the gateway handler
+        from gateway import gateway_handler
+        result = await gateway_handler(slug, path, request, db)
+        resp = JSONResponse(
+            status_code=result["status"],
+            content=result["body"],
+        )
+        for k, v in result.get("headers", {}).items():
+            resp.headers[k] = v
+        resp.headers["X-Powered-By"] = "Scalable"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
+        return resp
+
+    return await call_next(request)
 
 # ── Startup ──────────────────────────────────────────────
 

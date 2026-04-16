@@ -81,13 +81,17 @@ function CopyButton({ text, testId }) {
   );
 }
 
-function EndpointCard({ ep, gatewayUrl, defaultApiKey, cardId }) {
+function EndpointCard({ ep, gatewayUrl, gatewayFallback, defaultApiKey, cardId }) {
   const [tryResult, setTryResult] = useState(null);
   const [trying, setTrying] = useState(false);
   const colors = METHOD_COLORS[ep.method] || METHOD_COLORS.GET;
 
+  // Show subdomain URL in docs, but use fallback for actual "Try It" requests
+  const displayUrl = gatewayUrl;
+  const tryItUrl = gatewayFallback || `${BACKEND_URL}${gatewayUrl}`;
+
   const curlExample = `curl -X ${ep.method} \\
-  ${BACKEND_URL}${gatewayUrl}${ep.path} \\
+  ${displayUrl}${ep.path} \\
   -H "X-API-Key: YOUR_API_KEY"`;
 
   const handleTry = async () => {
@@ -95,7 +99,7 @@ function EndpointCard({ ep, gatewayUrl, defaultApiKey, cardId }) {
     setTryResult(null);
     const start = performance.now();
     try {
-      const resp = await fetch(`${BACKEND_URL}${gatewayUrl}${ep.path}`, {
+      const resp = await fetch(`${tryItUrl}${ep.path}`, {
         method: ep.method,
         headers: {
           "X-API-Key": defaultApiKey,
@@ -380,9 +384,14 @@ export default function DocsPage() {
             <p className="text-[#71717A] text-sm">
               Base URL:{" "}
               <code className="font-mono text-[#2563EB] text-xs bg-[#2563EB]/10 px-1.5 py-0.5 rounded-sm">
-                {BACKEND_URL}{config.gatewayUrl}
+                {config.gatewayUrl}
               </code>
             </p>
+            {config.gatewayFallback && config.gatewayDomain && (
+              <p className="text-[#52525B] text-xs mt-1">
+                Fallback: <code className="font-mono">{config.gatewayFallback}</code>
+              </p>
+            )}
           </div>
 
           {/* Endpoint Cards */}
@@ -391,6 +400,7 @@ export default function DocsPage() {
               key={ep.cardId}
               ep={ep}
               gatewayUrl={config.gatewayUrl}
+              gatewayFallback={config.gatewayFallback}
               defaultApiKey={config.defaultApiKey}
               cardId={ep.cardId}
             />
