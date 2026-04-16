@@ -374,6 +374,7 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/projects/{project_id}/scan")
 async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
+    """Non-streaming scan endpoint (legacy, kept for compatibility)"""
     from github_service import fetch_github_files
     from ai_agents import analyze_code, audit_security, merge_analysis_and_audit
 
@@ -448,6 +449,124 @@ async def scan_project(project_id: str, user: dict = Depends(get_current_user)):
         logger.error(f"Scan failed: {e}")
         await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "draft"}})
         raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
+
+
+@api_router.get("/projects/{project_id}/scan/stream")
+async def scan_project_stream(project_id: str, user: dict = Depends(get_current_user)):
+    """Streaming scan endpoint with ReAct pattern updates"""
+    from fastapi.responses import StreamingResponse
+    from github_service import fetch_github_files
+    from ai_agents import analyze_code, audit_security, merge_analysis_and_audit
+    import asyncio
+    import json
+
+    # Verify ownership
+    try:
+        project = await db.projects.find_one({"_id": ObjectId(project_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid project ID")
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if str(project.get("user_id")) != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    async def event_generator():
+        def emit(event_type: str, data: dict):
+            return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+        try:
+            # Update status to scanning
+            await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "scanning"}})
+            
+            # Step 1: Fetch files
+            yield emit("step", {"agent": "Code Analyst", "type": "reason", "message": "Analyzing repository structure and identifying source files..."})
+            await asyncio.sleep(0.5)
+            
+            repo_url = project.get("repo_url", "")
+            files = await fetch_github_files(repo_url)
+            
+            yield emit("step", {"agent": "Code Analyst", "type": "act", "message": f"Fetched {len(files)} files from repository"})
+            await asyncio.sleep(0.3)
+
+            # Step 2: Code analysis
+            yield emit("step", {"agent": "Code Analyst", "type": "reason", "message": "Scanning for API route patterns (Express, FastAPI, Flask, Django)..."})
+            await asyncio.sleep(0.5)
+            
+            code_analysis = await analyze_code(files)
+            route_count = len(code_analysis.get('routes', []))
+            
+            yield emit("step", {"agent": "Code Analyst", "type": "act", "message": f"Discovered {route_count} API endpoints across {len(files)} files"})
+            await asyncio.sleep(0.3)
+
+            # Step 3: Security audit
+            yield emit("step", {"agent": "Security Auditor", "type": "reason", "message": "Evaluating endpoints for authentication requirements and data exposure risks..."})
+            await asyncio.sleep(0.5)
+            
+            security_audit = await audit_security(code_analysis)
+            
+            yield emit("step", {"agent": "Security Auditor", "type": "act", "message": "Categorized endpoints by risk level (Safe, Review Needed, Blocked)"})
+            await asyncio.sleep(0.3)
+
+            # Step 4: Generate report
+            yield emit("step", {"agent": "Risk Assessment", "type": "reason", "message": "Compiling security recommendations and field filtering rules..."})
+            await asyncio.sleep(0.5)
+            
+            merged_routes = merge_analysis_and_audit(code_analysis, security_audit)
+            
+            # Calculate breakdown
+            breakdown = {"green": 0, "yellow": 0, "red": 0}
+            for r in merged_routes:
+                risk = r.get("risk", "yellow")
+                if risk in breakdown:
+                    breakdown[risk] += 1
+
+            yield emit("step", {"agent": "Risk Assessment", "type": "act", "message": f"Report complete: {breakdown['green']} safe, {breakdown['yellow']} need review, {breakdown['red']} blocked"})
+            await asyncio.sleep(0.3)
+
+            # Step 5: Save to database
+            await db.discovered_routes.delete_many({"project_id": ObjectId(project_id)})
+            
+            now = datetime.now(timezone.utc).isoformat()
+            for route in merged_routes:
+                route["project_id"] = ObjectId(project_id)
+                route["created_at"] = now
+
+            if merged_routes:
+                await db.discovered_routes.insert_many(merged_routes)
+
+            # Update project
+            update_fields = {
+                "status": "configuring",
+                "endpoint_count": len(merged_routes),
+                "updated_at": now,
+            }
+            auth_strategy = code_analysis.get("authStrategy", {})
+            if auth_strategy.get("loginEndpoint"):
+                update_fields["login_endpoint"] = auth_strategy["loginEndpoint"]
+
+            await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": update_fields})
+
+            # Final event
+            yield emit("complete", {
+                "routeCount": len(merged_routes),
+                "breakdown": breakdown,
+                "projectId": project_id,
+            })
+
+        except Exception as e:
+            logger.error(f"Scan stream failed: {e}")
+            await db.projects.update_one({"_id": ObjectId(project_id)}, {"$set": {"status": "draft"}})
+            yield emit("error", {"message": str(e)})
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 @api_router.get("/projects/{project_id}/routes")
 async def get_project_routes(project_id: str, user: dict = Depends(get_current_user)):
