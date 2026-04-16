@@ -37,9 +37,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[var(--border-primary)]">
         <Link to="/" className="flex items-center gap-2.5" data-testid="sidebar-logo">
-          <div className="w-7 h-7 bg-[var(--mysteria)] rounded-xl flex items-center justify-center">
-            <span className="text-white text-xs font-bold">S</span>
-          </div>
+          <img src="/logo-small.png" alt="Scalable" className="w-7 h-7 object-contain" />
           <span className="text-[var(--text-primary)] font-semibold text-lg tracking-tight">Scalable</span>
         </Link>
       </div>

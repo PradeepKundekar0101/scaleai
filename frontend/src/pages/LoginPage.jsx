@@ -29,9 +29,7 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-8">
         <div className="w-full max-w-sm">
           <Link to="/landing" className="flex items-center gap-2.5 mb-12">
-            <div className="w-8 h-8 bg-[#1b1938] rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">S</span>
-            </div>
+            <img src="/logo-small.png" alt="Scalable" className="w-8 h-8 object-contain" />
             <span className="text-[#292827] font-semibold text-xl tracking-tight">Scalable</span>
           </Link>
 

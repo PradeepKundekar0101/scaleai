@@ -51,9 +51,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 bg-[#1b1938]/90 backdrop-blur-md border-b border-white/10">
         <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-[#cbb7fb] rounded-lg flex items-center justify-center">
-              <span className="text-[#1b1938] text-xs font-bold">S</span>
-            </div>
+            <img src="/logo-light-small.png" alt="Scalable" className="w-7 h-7 object-contain" />
             <span className="text-white font-semibold text-lg tracking-tight">Scalable</span>
           </div>
           <div className="flex items-center gap-3">
@@ -199,9 +197,7 @@ export default function LandingPage() {
       <footer className="border-t border-[#dcd7d3] py-10 px-6">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 bg-[#1b1938] rounded-md flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">S</span>
-            </div>
+            <img src="/logo-light-small.png" alt="Scalable" className="w-6 h-6 object-contain" />
             <span className="text-[#292827]/60 text-sm">Scalable</span>
           </div>
           <p className="text-[#292827]/40 text-sm">Turn any SaaS into a PaaS</p>
