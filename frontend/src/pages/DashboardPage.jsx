@@ -272,56 +272,75 @@ export default function DashboardPage() {
 
       {/* Create Project Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="bg-[var(--bg-primary)] border-[var(--border-primary)] rounded-2xl shadow-xl max-w-md" data-testid="create-project-modal">
-          <DialogHeader>
-            <DialogTitle className="text-[var(--text-primary)] text-xl font-semibold font-heading">New Project</DialogTitle>
-            <DialogDescription className="text-[var(--text-secondary)] text-sm">
-              Connect a repository to create an API gateway
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label className="text-[var(--text-primary)] text-sm font-medium">Project Name</Label>
-              <Input
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="QuickBite API"
-                data-testid="create-project-name-input"
-                className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-11"
-                required
+        <DialogContent className="bg-[var(--bg-primary)] border-[var(--border-primary)] rounded-2xl shadow-xl max-w-2xl p-0 overflow-hidden" data-testid="create-project-modal">
+          <div className="flex min-h-[420px]">
+            {/* Left: Image */}
+            <div className="hidden sm:block w-[45%] relative shrink-0">
+              <img
+                src="/img-new-project.jpg"
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+              <div className="absolute bottom-0 left-0 right-0 p-5">
+                <p className="text-white/90 font-heading text-lg font-semibold leading-tight">Open new doors<br />for your API</p>
+                <p className="text-white/50 text-xs mt-1.5">Connect, scan, deploy — in minutes</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-[var(--text-primary)] text-sm font-medium">GitHub Repository URL</Label>
-              <Input
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/org/repo"
-                data-testid="create-project-repo-input"
-                className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-11"
-                required
-              />
+
+            {/* Right: Form */}
+            <div className="flex-1 p-7 flex flex-col justify-center">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-[var(--text-primary)] text-xl font-semibold font-heading">New Project</DialogTitle>
+                <DialogDescription className="text-[var(--text-secondary)] text-sm mt-1">
+                  Connect a repository to create an API gateway
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-[var(--text-primary)] text-sm font-medium">Project Name</Label>
+                  <Input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="QuickBite API"
+                    data-testid="create-project-name-input"
+                    className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-11"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[var(--text-primary)] text-sm font-medium">GitHub Repository URL</Label>
+                  <Input
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    placeholder="https://github.com/org/repo"
+                    data-testid="create-project-repo-input"
+                    className="bg-[var(--bg-primary)] border-[var(--border-primary)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-primary)] focus:ring-1 focus:ring-[var(--lavender)]/30 rounded-lg h-11"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end gap-3 pt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setModalOpen(false)}
+                    data-testid="create-project-cancel-btn"
+                    className="border-[var(--border-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] rounded-lg text-sm"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={creating}
+                    data-testid="create-project-submit-btn"
+                    className="bg-[var(--text-primary)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold"
+                  >
+                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Project"}
+                  </Button>
+                </div>
+              </form>
             </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setModalOpen(false)}
-                data-testid="create-project-cancel-btn"
-                className="border-[var(--border-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)] rounded-lg text-sm"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={creating}
-                data-testid="create-project-submit-btn"
-                className="bg-[var(--text-primary)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-sm font-semibold"
-              >
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Project"}
-              </Button>
-            </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </AppLayout>
