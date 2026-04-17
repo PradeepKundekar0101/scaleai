@@ -167,7 +167,7 @@ export default function KeysPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1
-              className="text-[var(--text-primary)] text-3xl font-semibold tracking-tight leading-[0.96]"
+              className="text-[var(--text-primary)] text-3xl font-semibold font-heading tracking-tight leading-[0.96]"
               data-testid="keys-title"
             >
               API Keys

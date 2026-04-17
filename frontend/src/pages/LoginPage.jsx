@@ -29,13 +29,11 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center px-8">
         <div className="w-full max-w-sm">
           <Link to="/landing" className="flex items-center gap-2.5 mb-12">
-            <div className="w-8 h-8 bg-[#1b1938] rounded-lg flex items-center justify-center">
-              <span className="text-white text-sm font-bold">S</span>
-            </div>
+            <img src="/logo-small.png" alt="Scalable" className="w-8 h-8 object-contain" />
             <span className="text-[#292827] font-semibold text-xl tracking-tight">Scalable</span>
           </Link>
 
-          <h1 className="text-3xl font-semibold text-[#292827] leading-[0.96] tracking-tight mb-2">Welcome back</h1>
+          <h1 className="text-3xl font-semibold font-heading text-[#292827] leading-[0.96] tracking-tight mb-2">Welcome back</h1>
           <p className="text-[#292827]/50 text-sm mb-8">Sign in to your account to continue</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,19 +78,23 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right: Decorative */}
-      <div className="hidden lg:flex flex-1 bg-[#1b1938] items-center justify-center relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-1/4 left-1/3 w-72 h-72 bg-[#cbb7fb]/25 rounded-full blur-3xl" />
-          <div className="absolute bottom-1/3 right-1/4 w-56 h-56 bg-[#714cb6]/20 rounded-full blur-3xl" />
-        </div>
-        <div className="relative text-center px-12">
-          <h2 className="text-4xl font-semibold text-white/95 leading-[0.96] tracking-tight mb-4">
-            Turn any SaaS<br />into a Platform
-          </h2>
-          <p className="text-white/60 text-base max-w-sm mx-auto leading-relaxed">
-            API gateway, docs, and SDKs — generated in minutes
-          </p>
+      {/* Right: Image */}
+      <div className="hidden lg:block flex-1 relative overflow-hidden">
+        <img
+          src="/img4.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1b1938]/40 via-transparent to-[#1b1938]/30" />
+        <div className="absolute bottom-0 left-0 right-0 p-10">
+          <div className="backdrop-blur-md bg-black/20 border border-white/10 rounded-2xl p-6 max-w-sm">
+            <h2 className="text-2xl font-semibold font-heading text-white leading-tight tracking-tight mb-2">
+              Turn any SaaS<br />into a Platform
+            </h2>
+            <p className="text-white/70 text-sm leading-relaxed">
+              API gateway, docs, and SDKs — generated in minutes
+            </p>
+          </div>
         </div>
       </div>
     </div>
