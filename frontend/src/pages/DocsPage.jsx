@@ -11,6 +11,8 @@ import {
   Key,
   Eye,
   EyeOff,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -128,6 +130,42 @@ function schemaToExample(schema, depth = 0) {
   }
 }
 
+// Walk an OpenAPI schema and return a flat list of fields:
+// [{ name, type, required, description }]
+function walkSchemaFields(schema, prefix = "", depth = 0) {
+  if (!schema || depth > 4) return [];
+  const out = [];
+  const reqList = Array.isArray(schema.required) ? schema.required : [];
+  const props = schema.properties || {};
+  for (const [name, prop] of Object.entries(props)) {
+    const fullName = prefix ? `${prefix}.${name}` : name;
+    const type = prop.type || (prop.$ref ? "object" : "any");
+    out.push({
+      name: fullName,
+      type,
+      required: reqList.includes(name),
+      description: prop.description || "",
+    });
+    if (prop.type === "object" && prop.properties) {
+      out.push(...walkSchemaFields(prop, fullName, depth + 1));
+    } else if (prop.type === "array" && prop.items?.type === "object" && prop.items.properties) {
+      out.push(...walkSchemaFields(prop.items, `${fullName}[]`, depth + 1));
+    }
+  }
+  return out;
+}
+
+// Pull body schema fields out of the OpenAPI spec for a specific endpoint.
+function extractSpecFields(spec, method, path) {
+  try {
+    const op = spec?.paths?.[path]?.[method.toLowerCase()];
+    const schema = op?.requestBody?.content?.["application/json"]?.schema;
+    return walkSchemaFields(schema);
+  } catch {
+    return [];
+  }
+}
+
 // Look up an example body from the OpenAPI spec for a given method+path
 function getBodyExample(spec, method, path) {
   try {
@@ -165,7 +203,7 @@ function CopyButton({ text, testId }) {
   );
 }
 
-function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, cardId }) {
+function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, slug, cardId }) {
   const [tryResult, setTryResult] = useState(null);
   const [trying, setTrying] = useState(false);
   const colors = METHOD_COLORS[ep.method] || METHOD_COLORS.GET;
@@ -180,10 +218,52 @@ function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, cardId })
   const initialBody = useMemo(() => {
     if (!hasBody) return "";
     const example = getBodyExample(spec, ep.method, ep.path);
-    return example ? JSON.stringify(example, null, 2) : "{\n  \n}";
+    return example ? JSON.stringify(example, null, 2) : "";
   }, [hasBody, spec, ep.method, ep.path]);
   const [bodyText, setBodyText] = useState(initialBody);
   const [bodyError, setBodyError] = useState(null);
+
+  // Body parameters: from the OpenAPI spec, or AI-suggested on demand.
+  const specFields = useMemo(
+    () => (hasBody ? extractSpecFields(spec, ep.method, ep.path) : []),
+    [hasBody, spec, ep.method, ep.path]
+  );
+  const [aiFields, setAiFields] = useState(null);
+  const [aiSource, setAiSource] = useState(null); // 'spec' | 'ai' | null
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState(null);
+
+  const fields = aiFields ?? specFields;
+  const fieldSource =
+    aiSource ??
+    (specFields.length > 0 ? "spec" : null);
+
+  const handleSuggestBody = async () => {
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/projects/${slug}/suggest-body`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: ep.method, path: ep.path }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setAiFields(data.fields || []);
+      setAiSource("ai");
+      if (data.example) {
+        setBodyText(JSON.stringify(data.example, null, 2));
+        setBodyError(null);
+      }
+    } catch (e) {
+      setSuggestError(e.message);
+    } finally {
+      setSuggesting(false);
+    }
+  };
 
   const displayUrl = gatewayUrl;
   const tryItUrl = gatewayFallback || `${BACKEND_URL}${gatewayUrl}`;
@@ -360,39 +440,181 @@ function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, cardId })
 
         {/* Request Body (POST / PUT / PATCH) */}
         {hasBody && (
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-px bg-[#27272A] flex-1" />
-              <span className="text-[10px] uppercase tracking-wider text-[#71717A]">
-                Request Body
-                <span className="text-[#52525B] normal-case ml-1.5">application/json</span>
-              </span>
-              <button
-                onClick={formatBody}
-                className="text-[10px] uppercase tracking-wider text-[#71717A] hover:text-[#2563EB] transition-colors"
-                data-testid={`format-body-${cardId}`}
-              >
-                Format
-              </button>
-              <div className="h-px bg-[#27272A] flex-1" />
+          <div className="space-y-4">
+            {/* Body Parameters table */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px bg-[#27272A] flex-1" />
+                <span className="text-[10px] uppercase tracking-wider text-[#71717A]">
+                  Body Parameters
+                  {fields.length > 0 && (
+                    <span className="text-[#52525B] normal-case ml-1.5">
+                      {fields.length} field{fields.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </span>
+                {fieldSource === "ai" && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/30 px-1.5 py-0.5 rounded-sm"
+                    title="Inferred by AI from the endpoint description"
+                  >
+                    <Sparkles className="w-2.5 h-2.5" />
+                    AI inferred
+                  </span>
+                )}
+                <div className="h-px bg-[#27272A] flex-1" />
+              </div>
+
+              {fields.length > 0 ? (
+                <div
+                  className="border border-[#27272A] rounded-sm overflow-hidden bg-[#09090B]"
+                  data-testid={`body-fields-${cardId}`}
+                >
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[#0F0F12] border-b border-[#27272A]">
+                        <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-[#71717A] font-medium w-1/3">
+                          Field
+                        </th>
+                        <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-[#71717A] font-medium w-20">
+                          Type
+                        </th>
+                        <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wider text-[#71717A] font-medium">
+                          Description
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fields.map((f, i) => (
+                        <tr
+                          key={`${f.name}-${i}`}
+                          className="border-b border-[#27272A] last:border-b-0"
+                        >
+                          <td className="px-3 py-2 align-top">
+                            <code className="font-mono text-[11px] text-[#FAFAFA]">
+                              {f.name}
+                            </code>
+                            {f.required && (
+                              <span className="ml-1.5 text-[9px] uppercase tracking-wider text-red-400 font-semibold">
+                                required
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <code className="font-mono text-[11px] text-blue-400">
+                              {f.type}
+                            </code>
+                          </td>
+                          <td className="px-3 py-2 align-top text-[11px] text-[#A1A1AA] leading-relaxed">
+                            {f.description || (
+                              <span className="text-[#52525B] italic">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div
+                  className="flex items-start gap-3 px-4 py-3 bg-[#0F0F12] border border-dashed border-[#27272A] rounded-sm"
+                  data-testid={`body-fields-empty-${cardId}`}
+                >
+                  <AlertCircle className="w-4 h-4 text-[#71717A] mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-[#A1A1AA] leading-relaxed">
+                      No request body schema is documented for this endpoint.
+                    </p>
+                    <p className="text-[11px] text-[#71717A] mt-0.5 leading-relaxed">
+                      Let AI infer the expected fields from the endpoint description.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSuggestBody}
+                    disabled={suggesting}
+                    data-testid={`suggest-body-${cardId}`}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-medium border transition-colors ${
+                      suggesting
+                        ? "border-[#27272A] bg-[#18181B] text-[#71717A] cursor-wait"
+                        : "border-purple-500/40 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
+                    }`}
+                  >
+                    {suggesting ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    {suggesting ? "Thinking…" : "Suggest with AI"}
+                  </button>
+                </div>
+              )}
+
+              {suggestError && (
+                <p
+                  className="text-[11px] text-red-400 mt-1.5 flex items-center gap-1.5"
+                  data-testid={`suggest-error-${cardId}`}
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  {suggestError}
+                </p>
+              )}
             </div>
-            <textarea
-              value={bodyText}
-              onChange={(e) => {
-                setBodyText(e.target.value);
-                setBodyError(null);
-              }}
-              spellCheck={false}
-              data-testid={`body-${cardId}`}
-              rows={Math.min(12, Math.max(4, bodyText.split("\n").length + 1))}
-              className={`w-full bg-[#09090B] border ${
-                bodyError ? "border-red-500/60" : "border-[#27272A] focus:border-[#2563EB]"
-              } focus:outline-none rounded-sm px-3 py-2.5 text-xs font-mono text-[#FAFAFA] placeholder-[#52525B] transition-colors resize-y leading-relaxed`}
-              placeholder="{}"
-            />
-            {bodyError && (
-              <p className="text-[11px] text-red-400 mt-1.5 font-mono">{bodyError}</p>
-            )}
+
+            {/* Body editor */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-px bg-[#27272A] flex-1" />
+                <span className="text-[10px] uppercase tracking-wider text-[#71717A]">
+                  Request Body
+                  <span className="text-[#52525B] normal-case ml-1.5">application/json</span>
+                </span>
+                {fields.length > 0 && fieldSource !== "ai" && (
+                  <button
+                    onClick={handleSuggestBody}
+                    disabled={suggesting}
+                    title="Generate a fresh example with AI"
+                    className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#71717A] hover:text-purple-400 transition-colors disabled:opacity-50"
+                    data-testid={`regenerate-body-${cardId}`}
+                  >
+                    {suggesting ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    AI Example
+                  </button>
+                )}
+                <button
+                  onClick={formatBody}
+                  className="text-[10px] uppercase tracking-wider text-[#71717A] hover:text-[#2563EB] transition-colors"
+                  data-testid={`format-body-${cardId}`}
+                >
+                  Format
+                </button>
+                <div className="h-px bg-[#27272A] flex-1" />
+              </div>
+              <textarea
+                value={bodyText}
+                onChange={(e) => {
+                  setBodyText(e.target.value);
+                  setBodyError(null);
+                }}
+                spellCheck={false}
+                data-testid={`body-${cardId}`}
+                rows={Math.min(14, Math.max(6, bodyText.split("\n").length + 1))}
+                className={`w-full bg-[#09090B] border ${
+                  bodyError ? "border-red-500/60" : "border-[#27272A] focus:border-[#2563EB]"
+                } focus:outline-none rounded-sm px-3 py-2.5 text-xs font-mono text-[#FAFAFA] placeholder-[#52525B] transition-colors resize-y leading-relaxed`}
+                placeholder={
+                  fields.length > 0
+                    ? `{\n  "${fields[0].name}": ...\n}`
+                    : '{\n  "key": "value"\n}'
+                }
+              />
+              {bodyError && (
+                <p className="text-[11px] text-red-400 mt-1.5 font-mono">{bodyError}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -694,7 +916,7 @@ export default function DocsPage() {
       {/* TOC Sidebar */}
       {activeTab === "api" && (
         <aside
-          className="fixed left-0 top-26 bottom-0 w-56 bg-[#09090B] border-r border-[#27272A] overflow-y-auto py-4 px-3 z-40"
+          className="fixed left-0 top-[104px] bottom-0 w-56 bg-[#09090B] border-r border-[#27272A] overflow-y-auto pt-5 pb-6 px-3 z-40"
           data-testid="docs-toc"
         >
           {Object.entries(groups).map(([group, eps]) => (
@@ -732,13 +954,13 @@ export default function DocsPage() {
       {/* Main content */}
       <main
         ref={mainRef}
-        className={`pt-26 min-h-screen ${activeTab === "api" ? "ml-56" : "ml-0"}`}
+        className={`pt-[104px] min-h-screen ${activeTab === "api" ? "ml-56" : "ml-0"}`}
         data-testid="docs-main"
       >
         {activeTab === "api" ? (
           <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
             {/* Intro */}
-            <div className="mb-4 pt-20">
+            <div className="mb-4">
               <h1 className="text-[#FAFAFA] text-2xl font-semibold tracking-tight mb-1">
                 {config.projectName} API Reference
               </h1>
@@ -756,7 +978,7 @@ export default function DocsPage() {
             </div>
 
             {/* Sticky API key bar — used by every Try It */}
-            <div className="sticky top-26 z-30 -mx-2 px-2 py-2 bg-[#09090B]/95 backdrop-blur-sm">
+            <div className="sticky top-[104px] z-30 -mx-2 px-2 py-2 bg-[#09090B]/95 backdrop-blur-sm">
               <ApiKeyBar
                 apiKey={apiKey}
                 setApiKey={setApiKey}
@@ -773,6 +995,7 @@ export default function DocsPage() {
                 gatewayFallback={config.gatewayFallback}
                 apiKey={apiKey}
                 spec={config.spec}
+                slug={slug}
                 cardId={ep.cardId}
               />
             ))}

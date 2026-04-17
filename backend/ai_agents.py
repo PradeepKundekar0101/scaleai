@@ -361,6 +361,50 @@ async def generate_sdk_docs_ai(project_name: str, project_slug: str, gateway_url
         return None
 
 
+BODY_SUGGESTER_SYSTEM_PROMPT = """You are an API schema expert. Given an HTTP method, path, and short description, infer the most realistic JSON request body the endpoint would accept.
+
+Use common SaaS patterns (orders → items + customer + delivery, payments → amount + currency + orderId, profile updates → firstName + lastName + email, etc).
+
+Return ONLY valid JSON in this exact shape — no markdown, no explanation:
+{
+  "example": { /* complete, realistic example body using sensible field names and example values */ },
+  "fields": [
+    {
+      "name": "fieldName",
+      "type": "string | number | integer | boolean | object | array",
+      "required": true,
+      "description": "Plain-English explanation of what this field is for"
+    }
+  ]
+}
+
+Be specific. For nested objects, also flatten the children into the fields list with dot notation (e.g. "delivery.address"). Mark fields as required only when the endpoint clearly cannot succeed without them."""
+
+
+async def suggest_request_body(method: str, path: str, description: str) -> dict | None:
+    """Ask Claude to infer a realistic request body for an endpoint."""
+    user_msg = (
+        f"Method: {method}\n"
+        f"Path: {path}\n"
+        f"Description: {description or '(none provided)'}\n\n"
+        f"Generate the example body and field list."
+    )
+    try:
+        result = await asyncio.wait_for(
+            call_claude(BODY_SUGGESTER_SYSTEM_PROMPT, user_msg), timeout=15
+        )
+        if isinstance(result, dict) and "example" in result and "fields" in result:
+            return result
+        logger.warning("Body suggester returned unexpected shape")
+        return None
+    except asyncio.TimeoutError:
+        logger.warning("Body suggester timed out")
+        return None
+    except Exception as e:
+        logger.error(f"Body suggester failed: {e}")
+        return None
+
+
 def merge_analysis_and_audit(code_analysis: dict, security_audit: dict) -> list:
     """Merge code analysis routes with security audit results."""
     # Build lookup by method+path

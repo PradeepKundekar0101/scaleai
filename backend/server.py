@@ -1642,7 +1642,66 @@ async def get_docs_config(slug: str):
         "defaultApiKey": project.get("default_api_key", ""),
         "spec": spec,
         "endpoints": ep_list,
+        "sdkDocs": project.get("sdk_docs", ""),
+        "npmPackage": project.get("npm_package_name", ""),
+        "npmVersion": project.get("npm_version", ""),
+        "npmPublished": project.get("npm_published", False),
     }
+
+
+class SuggestBodyInput(BaseModel):
+    method: str
+    path: str
+
+
+@api_router.post("/projects/{slug}/suggest-body")
+async def suggest_body(slug: str, body: SuggestBodyInput):
+    """Public endpoint — returns AI-inferred request body schema for a single endpoint.
+
+    Used by the docs page when the OpenAPI spec lacks a requestBody schema, so users
+    can still see the expected fields without re-deploying the project.
+    """
+    from ai_agents import suggest_request_body
+
+    print(f"[ROUTE] POST /api/projects/{slug}/suggest-body | method={body.method} path={body.path}")
+
+    project = await db.projects.find_one({"slug": slug})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.get("status") != "live":
+        raise HTTPException(status_code=404, detail="Project is not live")
+
+    # Look up the endpoint to get its description for richer prompting
+    ep = await db.exposed_endpoints.find_one({
+        "project_id": project["_id"],
+        "method": body.method.upper(),
+        "path": body.path,
+        "is_active": True,
+    })
+    if not ep:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    description = ep.get("description", "")
+
+    # Cache key — avoid repeated AI calls for the same endpoint
+    cache_key = f"{body.method.upper()}:{body.path}"
+    cached_bodies = project.get("suggested_bodies", {}) or {}
+    if cache_key in cached_bodies:
+        print(f"[SUGGEST_BODY] Cache hit for {cache_key}")
+        return cached_bodies[cache_key]
+
+    print(f"[SUGGEST_BODY] Calling AI for {cache_key} (desc='{description[:60]}…')")
+    result = await suggest_request_body(body.method.upper(), body.path, description)
+    if not result:
+        raise HTTPException(status_code=503, detail="Could not generate body suggestion. Try again.")
+
+    # Cache for next time
+    cached_bodies[cache_key] = result
+    await db.projects.update_one(
+        {"_id": project["_id"]},
+        {"$set": {"suggested_bodies": cached_bodies}},
+    )
+    print(f"[SUGGEST_BODY] Cached {cache_key} ({len(result.get('fields', []))} fields)")
+    return result
 
 # ── Include router ───────────────────────────────────────
 
