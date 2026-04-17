@@ -203,7 +203,7 @@ function CopyButton({ text, testId }) {
   );
 }
 
-function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, slug, cardId }) {
+function EndpointCard({ ep, gatewayUrl, apiKey, spec, slug, cardId }) {
   const [tryResult, setTryResult] = useState(null);
   const [trying, setTrying] = useState(false);
   const colors = METHOD_COLORS[ep.method] || METHOD_COLORS.GET;
@@ -265,8 +265,13 @@ function EndpointCard({ ep, gatewayUrl, gatewayFallback, apiKey, spec, slug, car
     }
   };
 
+  // What we SHOW in the cURL example — always the pretty subdomain URL.
   const displayUrl = gatewayUrl;
-  const tryItUrl = gatewayFallback || `${BACKEND_URL}${gatewayUrl}`;
+  // What we actually HIT for "Try It". Prefer the subdomain (resolves directly to
+  // the backend via wildcard DNS). The path-based fallback often goes through the
+  // marketing site, which doesn't proxy /api/* and strips CORS headers — so we
+  // hit the backend directly via BACKEND_URL when no subdomain is configured.
+  const tryItUrl = gatewayUrl || `${BACKEND_URL}/api/gateway/${slug}`;
 
   const builtPath = buildPath(ep.path, pathParams);
   const fullDisplayUrl = `${displayUrl}${builtPath}${queryString ? `?${queryString.replace(/^\?/, "")}` : ""}`;
@@ -992,7 +997,6 @@ export default function DocsPage() {
                 key={ep.cardId}
                 ep={ep}
                 gatewayUrl={config.gatewayUrl}
-                gatewayFallback={config.gatewayFallback}
                 apiKey={apiKey}
                 spec={config.spec}
                 slug={slug}
