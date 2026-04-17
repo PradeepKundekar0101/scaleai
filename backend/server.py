@@ -1711,12 +1711,46 @@ app.include_router(api_router)
 
 from fastapi.responses import JSONResponse
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "X-API-Key, Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    "Access-Control-Expose-Headers": "X-RateLimit-Limit, X-RateLimit-Remaining, X-Powered-By",
+    "Access-Control-Max-Age": "86400",
+}
+
+
+def _attach_cors(resp: JSONResponse) -> JSONResponse:
+    for k, v in CORS_HEADERS.items():
+        resp.headers[k] = v
+    resp.headers["X-Powered-By"] = "Scalable"
+    return resp
+
+
 # Path-based gateway: /api/gateway/{slug}/{path}
 @app.api_route("/api/gateway/{project_slug}/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"])
 async def gateway_route(project_slug: str, path: str, request: Request):
+    # Short-circuit CORS preflight — browsers send OPTIONS before any POST/PUT/PATCH
+    # with JSON content-type or custom headers (X-API-Key). Must respond 2xx + CORS
+    # headers BEFORE the gateway tries to validate the API key.
+    if request.method == "OPTIONS":
+        print(f"[GATEWAY] CORS preflight for {project_slug}/{path}")
+        return _attach_cors(JSONResponse(status_code=204, content=None))
+
     print(f"[GATEWAY] {request.method} /api/gateway/{project_slug}/{path} | client={request.client.host if request.client else 'unknown'}")
-    from gateway import gateway_handler
-    result = await gateway_handler(project_slug, path, request, db)
+    try:
+        from gateway import gateway_handler
+        result = await gateway_handler(project_slug, path, request, db)
+    except Exception as e:
+        # Even errors must carry CORS headers, otherwise the browser surfaces
+        # them as opaque "CORS error" instead of the real status.
+        print(f"[GATEWAY] Handler raised: {e}")
+        logger.exception("Gateway handler crashed")
+        return _attach_cors(JSONResponse(
+            status_code=500,
+            content={"error": "gateway_error", "message": str(e)},
+        ))
+
     print(f"[GATEWAY] Response: status={result['status']} for {request.method} /{path} (slug={project_slug})")
     resp = JSONResponse(
         status_code=result["status"],
@@ -1724,11 +1758,7 @@ async def gateway_route(project_slug: str, path: str, request: Request):
     )
     for k, v in result.get("headers", {}).items():
         resp.headers[k] = v
-    resp.headers["X-Powered-By"] = "Scalable"
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-    return resp
+    return _attach_cors(resp)
 
 
 # ── Subdomain-based gateway middleware ─────────────────────
@@ -1760,19 +1790,21 @@ async def subdomain_gateway_middleware(request: Request, call_next):
         path = request.url.path.lstrip("/")
         print(f"[SUBDOMAIN_GW] {request.method} {host}/{path} → slug={slug}")
 
-        # Handle CORS preflight for subdomain requests
         if request.method == "OPTIONS":
             print(f"[SUBDOMAIN_GW] CORS preflight for {slug}/{path}")
-            resp = JSONResponse(status_code=204, content=None)
-            resp.headers["Access-Control-Allow-Origin"] = "*"
-            resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-            resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
-            resp.headers["Access-Control-Max-Age"] = "86400"
-            return resp
+            return _attach_cors(JSONResponse(status_code=204, content=None))
 
-        # Route through the gateway handler
-        from gateway import gateway_handler
-        result = await gateway_handler(slug, path, request, db)
+        try:
+            from gateway import gateway_handler
+            result = await gateway_handler(slug, path, request, db)
+        except Exception as e:
+            print(f"[SUBDOMAIN_GW] Handler raised: {e}")
+            logger.exception("Subdomain gateway handler crashed")
+            return _attach_cors(JSONResponse(
+                status_code=500,
+                content={"error": "gateway_error", "message": str(e)},
+            ))
+
         print(f"[SUBDOMAIN_GW] Response: status={result['status']} for {request.method} {slug}/{path}")
         resp = JSONResponse(
             status_code=result["status"],
@@ -1780,10 +1812,7 @@ async def subdomain_gateway_middleware(request: Request, call_next):
         )
         for k, v in result.get("headers", {}).items():
             resp.headers[k] = v
-        resp.headers["X-Powered-By"] = "Scalable"
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Headers"] = "X-API-Key, Content-Type, Authorization"
-        return resp
+        return _attach_cors(resp)
 
     return await call_next(request)
 
