@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import AppLayout from "@/components/AppLayout";
@@ -28,8 +28,83 @@ import {
   BarChart3,
   BookOpen,
   ArrowLeft,
+  Database,
+  FileText,
+  Code2,
+  Package,
+  Zap,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// ── Deployment step metadata (titles, copy, icons, ETAs) ─────────────────
+const DEPLOY_STEPS = [
+  {
+    key: "saveEndpoints",
+    icon: Database,
+    title: "Locking in endpoint configuration",
+    description: "Persisting selected routes with field-filtering rules",
+    activeMessage: "Writing security policies to the gateway…",
+    estSeconds: 1,
+  },
+  {
+    key: "verifyConnection",
+    icon: Link2,
+    title: "Verifying backend handshake",
+    description: "Re-authenticating with your service account",
+    activeMessage: "Exchanging credentials and caching the JWT…",
+    estSeconds: 2,
+  },
+  {
+    key: "generateSpec",
+    icon: FileText,
+    title: "Designing your OpenAPI 3.0 spec",
+    description: "AI is documenting every endpoint with examples & schemas",
+    activeMessage: "Claude is reading your routes and inventing example payloads…",
+    estSeconds: 18,
+  },
+  {
+    key: "generateSdk",
+    icon: Code2,
+    title: "Crafting type-safe TypeScript SDK",
+    description: "Resource-grouped methods with full IDE autocomplete",
+    activeMessage: "Compiling typed interfaces from your API surface…",
+    estSeconds: 25,
+  },
+  {
+    key: "createKey",
+    icon: Key,
+    title: "Minting your first API key",
+    description: "Scoped to your selected endpoints, hashed at rest",
+    activeMessage: "Generating a cryptographic secret…",
+    estSeconds: 1,
+  },
+  {
+    key: "publishNpm",
+    icon: Package,
+    title: "Publishing SDK to the npm registry",
+    description: "So anyone can install it with one command",
+    activeMessage: "Pushing tarball to npmjs.com…",
+    estSeconds: 10,
+  },
+  {
+    key: "activateGateway",
+    icon: Zap,
+    title: "Activating the production gateway",
+    description: "Spinning up the rate-limited proxy on the edge",
+    activeMessage: "Flipping the switch — almost live…",
+    estSeconds: 2,
+  },
+];
+
+const TOTAL_EST_SECONDS = DEPLOY_STEPS.reduce((sum, s) => sum + s.estSeconds, 0);
+
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return m > 0 ? `${m}m ${s.toString().padStart(2, "0")}s` : `${s}s`;
+}
 
 const METHOD_COLORS = {
   GET: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -59,6 +134,168 @@ function MethodBadge({ method }) {
     >
       {method}
     </span>
+  );
+}
+
+// Inline keyframes & gradients for the deploy overlay
+function DeployProgressStyles() {
+  return (
+    <style>{`
+      @keyframes deploy-shimmer-slide {
+        0% { background-position: -160% 0; }
+        100% { background-position: 260% 0; }
+      }
+      .deploy-progress-shimmer {
+        background-size: 200% 100%;
+        background-image: linear-gradient(
+          90deg,
+          rgba(203,183,251,1) 0%,
+          rgba(113,76,182,1) 35%,
+          rgba(255,255,255,0.55) 50%,
+          rgba(113,76,182,1) 65%,
+          rgba(166,133,226,1) 100%
+        );
+        animation: deploy-shimmer-slide 2.4s ease-in-out infinite;
+      }
+      @keyframes deploy-text-shimmer {
+        0% { background-position: -150% 0; }
+        100% { background-position: 250% 0; }
+      }
+      .deploy-text-shimmer {
+        background: linear-gradient(
+          90deg,
+          rgba(113,76,182,0.55) 0%,
+          rgba(113,76,182,1) 50%,
+          rgba(113,76,182,0.55) 100%
+        );
+        background-size: 200% 100%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: deploy-text-shimmer 2.2s linear infinite;
+      }
+      @keyframes deploy-pulse-ring {
+        0%   { transform: scale(0.92); opacity: 0.55; }
+        70%  { transform: scale(1.45); opacity: 0; }
+        100% { transform: scale(1.45); opacity: 0; }
+      }
+      .deploy-pulse-ring {
+        animation: deploy-pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .deploy-header-gradient {
+        background:
+          radial-gradient(circle at 15% 0%, rgba(203,183,251,0.35), transparent 55%),
+          radial-gradient(circle at 95% 100%, rgba(113,76,182,0.18), transparent 55%);
+      }
+      @keyframes deploy-step-enter {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .deploy-step-enter {
+        animation: deploy-step-enter 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes deploy-check-pop {
+        0%   { transform: scale(0.4); opacity: 0; }
+        60%  { transform: scale(1.15); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      .deploy-check-pop {
+        animation: deploy-check-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+      }
+      .deploy-line-fill {
+        transition: background-color 0.6s ease, height 0.6s ease;
+      }
+    `}</style>
+  );
+}
+
+function DeployStepItem({ step, status, isLast }) {
+  const Icon = step.icon;
+  const isComplete = status === "complete";
+  const isWorking = status === "working";
+  const isPending = status === "pending";
+
+  const ringClasses = isComplete
+    ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+    : isWorking
+    ? "bg-[var(--accent-primary)]/10 border-[var(--accent-primary)]/40 text-[var(--accent-primary)]"
+    : "bg-[var(--bg-secondary)] border-[var(--border-primary)] text-[var(--text-primary)]/30";
+
+  return (
+    <li
+      className="relative flex gap-4 pb-5 deploy-step-enter"
+      data-testid={`deploy-step-${step.key}`}
+      data-status={status}
+    >
+      {/* Connector line */}
+      {!isLast && (
+        <span
+          aria-hidden="true"
+          className={`absolute left-[19px] top-10 bottom-0 w-px deploy-line-fill ${
+            isComplete ? "bg-emerald-300" : "bg-[var(--border-primary)]"
+          }`}
+        />
+      )}
+
+      {/* Icon node */}
+      <div className="relative shrink-0">
+        {isWorking && (
+          <span className="absolute inset-0 rounded-xl bg-[var(--accent-primary)]/25 deploy-pulse-ring" />
+        )}
+        <div
+          className={`relative w-10 h-10 rounded-xl border flex items-center justify-center transition-all duration-300 ${ringClasses}`}
+        >
+          {isComplete ? (
+            <CheckCircle2 className="w-5 h-5 deploy-check-pop" strokeWidth={2.25} />
+          ) : isWorking ? (
+            <Icon className="w-[18px] h-[18px]" strokeWidth={2} />
+          ) : (
+            <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          )}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0 pt-0.5">
+        <div className="flex items-baseline gap-2">
+          <h3
+            className={`text-sm font-medium leading-snug transition-colors ${
+              isComplete
+                ? "text-[var(--text-primary)]"
+                : isWorking
+                ? "deploy-text-shimmer font-semibold"
+                : "text-[var(--text-primary)]/45"
+            }`}
+          >
+            {step.title}
+          </h3>
+          {isComplete && (
+            <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider">
+              Done
+            </span>
+          )}
+          {isPending && step.estSeconds > 0 && (
+            <span className="text-[10px] text-[var(--text-primary)]/30 font-mono">
+              ~{step.estSeconds}s
+            </span>
+          )}
+        </div>
+        <p
+          className={`text-xs leading-relaxed mt-0.5 transition-colors ${
+            isPending ? "text-[var(--text-primary)]/30" : "text-[var(--text-primary)]/55"
+          }`}
+        >
+          {step.description}
+        </p>
+
+        {isWorking && (
+          <div className="mt-2.5 flex items-center gap-2 text-xs text-[var(--accent-primary)]/85">
+            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+            <span className="italic">{step.activeMessage}</span>
+          </div>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -218,7 +455,26 @@ export default function EndpointsPage() {
     publishNpm: "pending",
     activateGateway: "pending",
   });
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const deployStartRef = useRef(null);
   const [copied, setCopied] = useState({});
+
+  // Tick elapsed time while deploying
+  useEffect(() => {
+    if (deployState !== "deploying") {
+      setElapsedMs(0);
+      deployStartRef.current = null;
+      return;
+    }
+    deployStartRef.current = Date.now();
+    setElapsedMs(0);
+    const interval = setInterval(() => {
+      if (deployStartRef.current) {
+        setElapsedMs(Date.now() - deployStartRef.current);
+      }
+    }, 250);
+    return () => clearInterval(interval);
+  }, [deployState]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -455,36 +711,101 @@ export default function EndpointsPage() {
 
   // Deploy progress overlay
   if (deployState === "deploying") {
-    const stepList = [
-      { key: "saveEndpoints", label: "Saving endpoint configuration" },
-      { key: "verifyConnection", label: "Verifying backend connection" },
-      { key: "generateSpec", label: "AI generating OpenAPI specification" },
-      { key: "generateSdk", label: "AI generating TypeScript SDK" },
-      { key: "createKey", label: "Creating API key" },
-      { key: "publishNpm", label: "Publishing SDK to npm" },
-      { key: "activateGateway", label: "Activating gateway" },
-    ];
+    const completedCount = DEPLOY_STEPS.filter((s) => deploySteps[s.key] === "complete").length;
+    const totalCount = DEPLOY_STEPS.length;
+    const progressPct = (completedCount / totalCount) * 100;
+    const activeStep = DEPLOY_STEPS.find((s) => deploySteps[s.key] === "working");
+    const remainingSeconds = DEPLOY_STEPS.filter(
+      (s) => deploySteps[s.key] !== "complete"
+    ).reduce((sum, s) => sum + s.estSeconds, 0);
+
     return (
       <AppLayout>
-        <div className="max-w-lg mx-auto mt-20" data-testid="deploy-progress">
-          <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-2xl p-8 shadow-sm">
-            <h2 className="text-[var(--text-primary)] font-semibold text-xl mb-6">
-              Deploying <span className="text-[var(--accent-primary)]">{project?.name}</span>...
-            </h2>
-            <div className="space-y-1">
-              {stepList.map((step) => {
-                const status = deploySteps[step.key];
-                return (
-                  <div key={step.key} className="flex items-center gap-3 py-2.5" data-testid={`deploy-step-${step.key}`}>
-                    {status === "complete" && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
-                    {status === "working" && <Loader2 className="w-4 h-4 text-[var(--accent-primary)] animate-spin shrink-0" />}
-                    {status === "pending" && <div className="w-4 h-4 rounded-full border border-[var(--border-primary)] shrink-0" />}
-                    <span className={`text-sm ${status === "complete" ? "text-[var(--text-primary)]" : status === "working" ? "text-[var(--text-primary)]" : "text-[var(--text-primary)]/40"}`}>
-                      {step.label}
-                    </span>
+        <DeployProgressStyles />
+        <div className="max-w-xl mx-auto mt-12 mb-12" data-testid="deploy-progress">
+          <div className="relative bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-3xl shadow-[0_8px_40px_-12px_rgba(113,76,182,0.18)] overflow-hidden">
+            {/* Header */}
+            <div className="relative px-8 pt-8 pb-6 border-b border-[var(--border-primary)] overflow-hidden">
+              <div className="absolute inset-0 deploy-header-gradient opacity-60 pointer-events-none" />
+              <div className="relative flex items-start gap-4">
+                <div className="relative shrink-0">
+                  <div className="absolute inset-0 rounded-2xl bg-[var(--accent-primary)]/30 deploy-pulse-ring" />
+                  <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-[#cbb7fb] to-[var(--accent-primary)] flex items-center justify-center shadow-lg shadow-[var(--accent-primary)]/20">
+                    <Sparkles className="w-5 h-5 text-white" />
                   </div>
-                );
-              })}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.18em] font-semibold text-[var(--accent-primary)] mb-1">
+                    Going Live
+                  </p>
+                  <h2 className="text-[var(--text-primary)] font-semibold font-heading text-2xl leading-[1.05] tracking-tight truncate">
+                    Shipping <span className="text-[var(--accent-primary)]">{project?.name || "your API"}</span>
+                  </h2>
+                  <p className="text-[var(--text-primary)]/55 text-sm mt-1.5 leading-relaxed">
+                    Sit tight — we're turning your internal endpoints into a production-grade public platform.
+                  </p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="relative mt-6">
+                <div className="flex items-center justify-between text-[11px] font-medium tracking-wide text-[var(--text-primary)]/60 mb-2">
+                  <span data-testid="deploy-progress-count">
+                    <span className="text-[var(--text-primary)] font-semibold">{completedCount}</span>
+                    <span className="text-[var(--text-primary)]/40"> / {totalCount} steps</span>
+                  </span>
+                  <span className="font-mono text-[var(--text-primary)]/50">
+                    {formatElapsed(elapsedMs)}
+                    {remainingSeconds > 0 && (
+                      <span className="text-[var(--text-primary)]/30"> · ~{remainingSeconds}s left</span>
+                    )}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-[var(--bg-secondary)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#cbb7fb] via-[var(--accent-primary)] to-[#a685e2] deploy-progress-shimmer transition-all duration-700 ease-out"
+                    style={{ width: `${Math.max(4, progressPct)}%` }}
+                    data-testid="deploy-progress-bar"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Steps timeline */}
+            <div className="px-8 py-6">
+              <ol className="relative space-y-1">
+                {DEPLOY_STEPS.map((step, idx) => {
+                  const status = deploySteps[step.key];
+                  const isLast = idx === DEPLOY_STEPS.length - 1;
+                  return (
+                    <DeployStepItem
+                      key={step.key}
+                      step={step}
+                      status={status}
+                      isLast={isLast}
+                    />
+                  );
+                })}
+              </ol>
+            </div>
+
+            {/* Footer */}
+            <div className="px-8 py-4 bg-[var(--bg-secondary)]/40 border-t border-[var(--border-primary)] flex items-center justify-between">
+              <p className="text-xs text-[var(--text-primary)]/50 flex items-center gap-1.5">
+                <Lock className="w-3 h-3" />
+                Encrypted in transit · Idempotent deploy
+              </p>
+              {activeStep ? (
+                <p className="text-xs text-[var(--accent-primary)] flex items-center gap-1.5 font-medium">
+                  <span className="relative flex w-1.5 h-1.5">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-60 animate-ping" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[var(--accent-primary)]" />
+                  </span>
+                  In progress
+                </p>
+              ) : (
+                <p className="text-xs text-[var(--text-primary)]/40">Queued</p>
+              )}
             </div>
           </div>
         </div>
